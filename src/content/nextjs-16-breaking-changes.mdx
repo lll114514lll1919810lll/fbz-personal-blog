@@ -1,0 +1,65 @@
+export const metadata = {
+  title: "Next.js 16 的三个破坏性变更",
+  date: "2026-10-06",
+  description: "params 变成 Promise、middleware 改名 proxy、revalidateTag 多了第二个参数——升级时最容易踩的坑。",
+  tags: ["技术", "Next.js"],
+}
+
+# Next.js 16 的三个破坏性变更
+
+升级到 Next.js 16 的时候，有几个地方和旧写法不一样，直接照抄旧代码会报错。
+
+## 1. `params` 和 `searchParams` 变成了 Promise
+
+这是最大的一处改变。Next.js 15 引入了异步 API，但保留了同步兼容期；**16 直接移除了同步访问**。
+
+```tsx
+// 旧写法：Next.js 16 里会报错
+export default function Page({ params }) {
+  const { slug } = params
+  return <h1>{slug}</h1>
+}
+
+// 新写法
+export default async function Page({ params }) {
+  const { slug } = await params
+  return <h1>{slug}</h1>
+}
+```
+
+好消息是配套的全局类型可以直接用，不用手写 `{ params: Promise<{slug: string}> }`：
+
+```tsx
+export default async function Page({ params }: PageProps<'/blog/[slug]'>) {
+  const { slug } = await params
+}
+```
+
+## 2. `middleware.ts` 改名成 `proxy.ts`
+
+改名的目的是说清楚「这是网络边界和路由的关卡」。
+
+```ts
+// proxy.ts
+export function proxy(request: Request) {}
+```
+
+导出的 `middleware` 函数名也要改成 `proxy`。注意 **`edge` 运行时不再支持**，proxy 固定跑在 Node.js 上。
+
+## 3. `revalidateTag` 需要第二个参数
+
+```ts
+// 旧写法
+revalidateTag('posts')
+
+// 新写法：指定 cacheLife 配置档
+revalidateTag('posts', 'max')
+```
+
+如果需要「立刻读到新数据」而不是「先给旧的、后台再更新」，用 Server Action 里的 `updateTag`。
+
+## 顺带一提
+
+- Turbopack 成为默认，`next dev` 和 `next build` 都不需要再加 `--turbopack`
+- `next dev` 的产物输出到 `.next/dev`，可以和 `next build` 并行运行
+- `next lint` 命令被移除了，直接用 ESLint 或 Biome

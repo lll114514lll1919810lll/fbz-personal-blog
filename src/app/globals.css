@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+/* Tailwind v4 是 CSS-first 配置：主题变量写在 CSS 里，@theme inline 把它们
+   注册成 Tailwind 可用的工具类（如 bg-background / text-foreground）。 */
+:root {
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --border: #e4e4e7;
+  --accent: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #ededed;
+    --muted: #18181b;
+    --muted-foreground: #a1a1aa;
+    --border: #27272a;
+    --accent: #60a5fa;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* 中文站点用系统字体栈，避免依赖 Google Fonts 的网络请求。
+   优先使用用户本机已安装的中文字体，渲染最快。 */
+html {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC",
+    "Noto Sans CJK SC", sans-serif;
+}
+
+/* --- MDX 正文排版 -------------------------------------------------------
+   MDX 编译出来的是裸 HTML 元素（h2、p、ul…），没有 class。
+   这里给文章正文容器加一个 .prose，然后用后代选择器统一样式。
+   这是 Tailwind v4 里给 Markdown 排版的标准做法。 */
+
+.prose {
+  color: var(--foreground);
+  line-height: 1.85;
+  font-size: 1.05rem;
+}
+
+.prose > * + * {
+  margin-top: 1.25em;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-weight: 700;
+  line-height: 1.35;
+  margin-top: 2em;
+  margin-bottom: 0.8em;
+  scroll-margin-top: 5rem;
+}
+
+.prose h1 {
+  font-size: 2rem;
+}
+.prose h2 {
+  font-size: 1.5rem;
+}
+.prose h3 {
+  font-size: 1.25rem;
+}
+
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.5rem;
+}
+
+.prose ul {
+  list-style: disc;
+}
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li + li {
+  margin-top: 0.4em;
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+}
+
+.prose code {
+  background: var(--muted);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.prose pre {
+  background: var(--muted);
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+
+.prose pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+.prose img {
+  border-radius: 8px;
+  max-width: 100%;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2.5em 0;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}

@@ -1,0 +1,76 @@
+export const metadata = {
+  title: "用 MDX 写文章的正确姿势",
+  date: "2026-10-05",
+  description: "这个博客的文章格式、frontmatter 写法，以及 MDX 和普通 Markdown 的区别。",
+  tags: ["技术", "写作"],
+}
+
+# 用 MDX 写文章的正确姿势
+
+这个博客的文章都放在 `src/content/` 目录下，每篇就是一个 `.mdx` 文件。
+
+## 文件头是必须的
+
+```mdx
+export const metadata = {
+  title: "文章标题",
+  date: "2026-10-05",
+  description: "一句话摘要，会显示在列表页和分享卡片上",
+  tags: ["技术", "写作"],
+}
+```
+
+这里用的是 **JavaScript 导出**，不是常见的 YAML frontmatter（`---` 包裹的那种）。原因是 `@next/mdx` 原生就支持这种写法，不需要额外装解析 frontmatter 的库。
+
+几个字段的说明：
+
+- `title` — 必填，文章标题
+- `date` — 必填，格式 `YYYY-MM-DD`，用于排序
+- `description` — 建议填，列表页摘要和 SEO 描述都用它
+- `tags` — 可选，标签页会按它归类
+- `draft` — 可选，设为 `true` 时这篇不会出现在列表和构建产物里
+
+## 日期格式不能写错
+
+必须是 `2026-10-05`，不能写 `2026/10/05` 也不能写 `2026年10月5日`。排序逻辑是按字符串比较的，格式不统一会导致顺序错乱。
+
+## 支持的 Markdown 语法
+
+除了常规语法，这些都能用：
+
+**表格**
+
+| 语法 | 效果 |
+| --- | --- |
+| `**加粗**` | **加粗** |
+| `*斜体*` | *斜体* |
+| `~~删除线~~` | ~~删除线~~ |
+| `` `行内代码` `` | `行内代码` |
+
+> 表格、删除线、任务列表这些是 GFM 扩展语法，
+> 由 `remark-gfm` 插件支持，已经配好了。
+
+**任务列表**
+
+- [x] 搭建博客骨架
+- [x] 写第一篇文章
+- [ ] 部署上线
+
+## 关于代码高亮
+
+这个博客目前没有配置语法高亮插件，代码块会以等宽字体原样显示。如果以后需要，可以装 `rehype-pretty-code`：
+
+```ts
+const withMDX = createMDX({
+  options: {
+    remarkPlugins: ["remark-gfm"],
+    rehypePlugins: ["rehype-slug", "rehype-pretty-code"],
+  },
+})
+```
+
+注意插件名必须是**字符串**，这是 Turbopack 的限制——它没法把 JavaScript 函数传给 Rust 那边。
+
+## 小结
+
+写文章这件事现在简化成：新建文件 → 写元信息 → 写正文。保存后浏览器会自动刷新。
