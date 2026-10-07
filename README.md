@@ -63,6 +63,9 @@ export const metadata = {
 
 保存后浏览器会自动刷新，首页和列表页立刻能看到。
 
+> **不要在正文里写 `# 一级标题`**：文章页页头已经渲染了 `metadata.title`，
+> 再写一遍会出现两个重复的大标题。正文从 `## 二级标题` 或普通段落开始即可。
+
 > 注意：元信息用的是 `export const metadata = {...}` 这种 JavaScript 写法，
 > 不是常见的 YAML frontmatter（`---` 包裹那种）。这是 `@next/mdx` 原生支持的方式，
 > 不需要额外装解析 frontmatter 的库。
