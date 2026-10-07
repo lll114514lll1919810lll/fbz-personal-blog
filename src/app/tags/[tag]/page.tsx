@@ -12,7 +12,11 @@ export async function generateMetadata({
   params,
 }: PageProps<"/tags/[tag]">): Promise<Metadata> {
   const { tag } = await params;
-  return { title: `#${decodeURIComponent(tag)}`, description: `标签 ${decodeURIComponent(tag)} 下的全部文章。` };
+  const decoded = decodeURIComponent(tag);
+  return {
+    title: `#${decoded}`,
+    description: `标签 ${decoded} 下的全部文章。`,
+  };
 }
 
 export default async function TagPage({ params }: PageProps<"/tags/[tag]">) {
@@ -23,11 +27,14 @@ export default async function TagPage({ params }: PageProps<"/tags/[tag]">) {
   if (posts.length === 0) notFound();
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight">#{decoded}</h1>
-        <p className="text-sm text-muted-foreground">共 {posts.length} 篇</p>
-      </div>
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-3xl font-bold tracking-tight">
+          <span className="text-accent">#</span>
+          {decoded}
+        </h1>
+        <p className="text-sm text-muted">共 {posts.length} 篇</p>
+      </header>
 
       <div className="flex flex-col">
         {posts.map((post) => (
@@ -37,9 +44,9 @@ export default async function TagPage({ params }: PageProps<"/tags/[tag]">) {
 
       <Link
         href="/tags"
-        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="text-[13px] text-muted transition-colors hover:text-foreground"
       >
-        ← 返回标签列表
+        ← 全部标签
       </Link>
     </div>
   );

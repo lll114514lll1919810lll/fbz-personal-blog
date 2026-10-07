@@ -1,43 +1,54 @@
 @import "tailwindcss";
 
-/* Tailwind v4 是 CSS-first 配置：主题变量写在 CSS 里，@theme inline 把它们
-   注册成 Tailwind 可用的工具类（如 bg-background / text-foreground）。 */
+/* ============================================================================
+   设计基调：极简约束
+   - 近乎单色的中性灰阶，只有「一个」饱和色用于交互提示（链接、目录高亮）
+   - 大量留白，细分割线，无阴影装饰
+   - 明暗两套配色跟随系统，色值一一对应
+   ========================================================================= */
+
 :root {
   --background: #ffffff;
-  --foreground: #1a1a1a;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
+  --surface: #fafafa; /* 卡片/悬浮层，比页面底色略深一点点 */
+  --foreground: #171717;
+  --secondary: #52525b; /* 次级文字：摘要、元信息 */
+  --muted: #a1a1aa; /* 三级文字：占位、装饰 */
   --border: #e4e4e7;
-  --accent: #2563eb;
+  --accent: #2563eb; /* 全站唯一强调色 */
+  --accent-soft: #eff6ff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #09090b;
+    --surface: #131316;
     --foreground: #ededed;
-    --muted: #18181b;
-    --muted-foreground: #a1a1aa;
-    --border: #27272a;
+    --secondary: #a1a1aa;
+    --muted: #71717a;
+    --border: #26262a;
     --accent: #60a5fa;
+    --accent-soft: #172033;
   }
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
+  --color-secondary: var(--secondary);
   --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 中文站点用系统字体栈，避免依赖 Google Fonts 的网络请求。
-   优先使用用户本机已安装的中文字体，渲染最快。 */
+/* 中文字体栈：优先本机已安装的中文字体，避免网络请求 */
 html {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
@@ -45,111 +56,192 @@ html {
     "Noto Sans CJK SC", sans-serif;
 }
 
-/* --- MDX 正文排版 -------------------------------------------------------
-   MDX 编译出来的是裸 HTML 元素（h2、p、ul…），没有 class。
-   这里给文章正文容器加一个 .prose，然后用后代选择器统一样式。
-   这是 Tailwind v4 里给 Markdown 排版的标准做法。 */
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* 统一的键盘焦点样式 */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   正文排版
+   MDX 编译出来的是裸 HTML 元素，没有 class。用 .prose 容器 + 后代选择器
+   统一控制样式。
+   ========================================================================= */
 
 .prose {
   color: var(--foreground);
-  line-height: 1.85;
-  font-size: 1.05rem;
+  font-size: 1.0625rem;
+  line-height: 1.9;
 }
 
 .prose > * + * {
-  margin-top: 1.25em;
+  margin-top: 1.35em;
 }
 
-.prose h1,
 .prose h2,
 .prose h3,
 .prose h4 {
-  font-weight: 700;
-  line-height: 1.35;
-  margin-top: 2em;
-  margin-bottom: 0.8em;
-  scroll-margin-top: 5rem;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  scroll-margin-top: 6rem; /* 锚点跳转时不被吸顶导航遮住 */
 }
 
-.prose h1 {
-  font-size: 2rem;
-}
 .prose h2 {
-  font-size: 1.5rem;
+  margin-top: 2.6em;
+  margin-bottom: 0.9em;
+  font-size: 1.4rem;
 }
+
 .prose h3 {
-  font-size: 1.25rem;
+  margin-top: 2.1em;
+  margin-bottom: 0.8em;
+  font-size: 1.12rem;
 }
 
 .prose a {
   color: var(--accent);
   text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  transition: opacity 0.15s ease;
+}
+
+.prose a:hover {
+  opacity: 0.7;
+}
+
+.prose strong {
+  font-weight: 650;
 }
 
 .prose ul,
 .prose ol {
-  padding-left: 1.5rem;
+  padding-left: 1.4rem;
 }
 
 .prose ul {
-  list-style: disc;
+  list-style: none;
+  padding-left: 1.1rem;
 }
+
+.prose ul > li {
+  position: relative;
+}
+
+/* 极简风格的项目符号：小圆点，不喧宾夺主 */
+.prose ul > li::before {
+  content: "";
+  position: absolute;
+  left: -0.95rem;
+  top: 0.78em;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--muted);
+}
+
 .prose ol {
   list-style: decimal;
 }
 
 .prose li + li {
-  margin-top: 0.4em;
+  margin-top: 0.45em;
+}
+
+.prose li > ul,
+.prose li > ol {
+  margin-top: 0.45em;
 }
 
 .prose blockquote {
-  border-left: 3px solid var(--accent);
-  padding-left: 1rem;
-  color: var(--muted-foreground);
+  border-left: 2px solid var(--accent);
+  padding-left: 1.1rem;
+  color: var(--secondary);
+}
+
+.prose blockquote p {
+  color: var(--secondary);
 }
 
 .prose code {
-  background: var(--muted);
-  padding: 0.15em 0.4em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.12em 0.38em;
   border-radius: 4px;
-  font-size: 0.9em;
+  font-size: 0.88em;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .prose pre {
-  background: var(--muted);
-  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1.1rem 1.25rem;
   border-radius: 8px;
   overflow-x: auto;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .prose pre code {
   background: transparent;
+  border: 0;
   padding: 0;
-  font-size: 0.875rem;
+  font-size: 0.855rem;
+  color: var(--foreground);
 }
 
 .prose img {
   border-radius: 8px;
+  border: 1px solid var(--border);
   max-width: 100%;
 }
 
 .prose hr {
   border: 0;
   border-top: 1px solid var(--border);
-  margin: 2.5em 0;
+  margin: 3em 0;
 }
 
 .prose table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.prose th {
+  background: var(--surface);
+  color: var(--secondary);
+  font-weight: 600;
 }
 
 .prose th,
 .prose td {
   border: 1px solid var(--border);
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.85rem;
   text-align: left;
+}
+
+/* 任务列表 */
+.prose li > input[type="checkbox"] {
+  margin-right: 0.45rem;
+  accent-color: var(--accent);
+}
+
+/* ============================================================================
+   动效：尊重系统的「减少动态效果」设置
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

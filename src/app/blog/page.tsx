@@ -11,11 +11,11 @@ export default function BlogPage() {
   const posts = getAllPosts();
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight">文章</h1>
-        <p className="text-sm text-muted-foreground">共 {posts.length} 篇</p>
-      </div>
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-3xl font-bold tracking-tight">文章</h1>
+        <p className="text-sm text-muted">共 {posts.length} 篇</p>
+      </header>
 
       {posts.length > 0 ? (
         <div className="flex flex-col">
@@ -24,7 +24,7 @@ export default function BlogPage() {
           ))}
         </div>
       ) : (
-        <p className="py-8 text-sm text-muted-foreground">还没有文章。</p>
+        <p className="py-8 text-sm text-muted">还没有文章。</p>
       )}
     </div>
   );

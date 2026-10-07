@@ -9,6 +9,10 @@ pnpm install     # 安装依赖
 pnpm dev         # 启动开发服务器 http://localhost:3000
 pnpm build       # 生产构建（会预渲染成静态 HTML）
 pnpm start       # 预览生产构建
+
+pnpm typecheck   # 类型检查
+pnpm lint        # 代码检查
+pnpm test        # 目录锚点一致性测试（需先启动 dev server）
 ```
 
 ## 目录结构
@@ -75,6 +79,25 @@ export const metadata = {
 站名、简介、导航菜单都在 `src/lib/site.ts`，只改这一个文件。
 上线后记得把里面的 `url` 填成你的正式域名。
 
+## 设计说明
+
+整体走**极简约束**路线：近乎单色的中性灰阶，全站只用一种强调蓝，
+靠留白和细分割线组织信息，不做阴影和多色装饰。明暗两套配色跟随系统。
+
+三个交互特性：
+
+| 特性 | 实现 | 说明 |
+| --- | --- | --- |
+| 文章目录 | `table-of-contents.tsx` | 桌面端贴在正文右侧，滚动时高亮当前小节；移动端收进折叠按钮 |
+| 阅读进度条 | `reading-progress.tsx` | 顶部 1.5px 细线，用 `rAF` 节流避免滚动掉帧 |
+| 悬停微交互 | `post-card.tsx` | 列表项悬停时泛底色、横线延展、摘要和标签淡入 |
+
+改配色只需动 `globals.css` 顶部的 CSS 变量，明暗两套值一一对应。
+
+**目录锚点的一致性**：`rehype-slug` 用 `github-slugger` 生成标题 id，
+所以 `getTableOfContents()` 也用同一个库算 slug，锚点跳转才可靠。
+`pnpm test` 会拿真实渲染的 HTML 对比验证这一点。
+
 ## 技术说明
 
 - **Turbopack 是默认的**，`next.config.ts` 里的 remark/rehype 插件必须写**字符串名**（如
@@ -83,6 +106,7 @@ export const metadata = {
   `PageProps<'/blog/[slug]'>`，不用手写
 - 文章页和标签页用 `generateStaticParams` 在构建时预渲染，部署到静态托管即可
 - 正文样式在 `globals.css` 的 `.prose` 块里，通过后代选择器作用于 MDX 生成的裸 HTML
+- 滚动高亮用 `IntersectionObserver` 而非监听 scroll 计算位置，长文滚动更顺滑
 
 ## 部署
 

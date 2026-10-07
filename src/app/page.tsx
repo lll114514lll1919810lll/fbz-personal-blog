@@ -6,41 +6,44 @@ import { siteConfig } from "@/lib/site";
 export default function HomePage() {
   const posts = getAllPosts();
   const latest = posts.slice(0, 5);
+  const totalWords = posts.reduce((sum, p) => sum + (p.readingTime ?? 0), 0);
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-16 sm:gap-20">
       {/* 站点介绍 */}
-      <section className="flex flex-col gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">{siteConfig.name}</h1>
-        <p className="max-w-prose leading-relaxed text-muted-foreground">
+      <section className="flex flex-col gap-5">
+        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          {siteConfig.name}
+        </h1>
+        <p className="max-w-xl text-lg leading-relaxed text-secondary">
           {siteConfig.description}
         </p>
-        <div className="flex gap-3 pt-2 text-sm">
+
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-2 text-sm">
           <Link
             href="/blog"
-            className="rounded-lg bg-foreground px-4 py-2 font-medium text-background transition-opacity hover:opacity-85"
+            className="font-medium text-accent transition-opacity hover:opacity-70"
           >
-            开始阅读
+            开始阅读 →
           </Link>
-          <Link
-            href="/about"
-            className="rounded-lg border border-border px-4 py-2 font-medium transition-colors hover:bg-muted"
-          >
-            关于我
-          </Link>
+          <span className="text-muted">
+            {posts.length} 篇文章 · 约 {totalWords} 分钟读完
+          </span>
         </div>
       </section>
 
       {/* 最新文章 */}
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-xl font-semibold tracking-tight">最新文章</h2>
+          <h2 className="text-sm font-medium tracking-wide text-muted">
+            最新文章
+          </h2>
           {posts.length > latest.length && (
             <Link
               href="/blog"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="text-[13px] text-muted transition-colors hover:text-foreground"
             >
-              查看全部 {posts.length} 篇 →
+              全部 {posts.length} 篇 →
             </Link>
           )}
         </div>
@@ -52,12 +55,11 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <p className="py-8 text-sm text-muted-foreground">
+          <p className="py-8 text-sm text-muted">
             还没有文章。去{" "}
-            <code className="rounded bg-muted px-1.5 py-0.5">
-              src/content/
-            </code>{" "}
-            新建一个 <code className="rounded bg-muted px-1.5 py-0.5">.mdx</code>{" "}
+            <code className="rounded bg-surface px-1.5 py-0.5">src/content/</code>{" "}
+            新建一个{" "}
+            <code className="rounded bg-surface px-1.5 py-0.5">.mdx</code>{" "}
             文件开始写吧。
           </p>
         )}

@@ -1,10 +1,9 @@
 import createMDX from "@next/mdx";
 import type { NextConfig } from "next";
-import remarkGfm from "remark-gfm";
-import rehypeSlug from "rehype-slug";
 
-// Next.js 16 默认使用 Turbopack，而 Turbopack 无法把 JavaScript 函数传给 Rust，
-// 所以 remark/rehype 插件必须写成「字符串名」，由 @next/mdx 在内部解析。
+// 注意：这里不能 import remarkGfm / rehypeSlug 再传函数进去，
+// Next.js 16 默认的 Turbopack 无法把 JavaScript 函数传给 Rust，
+// 所以插件必须写成字符串名，由 @next/mdx 内部自行解析。
 // （写成 `remarkGfm` 这样的函数引用会导致构建报错。）
 const withMDX = createMDX({
   options: {

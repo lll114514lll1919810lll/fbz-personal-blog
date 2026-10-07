@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import GithubSlugger from "github-slugger";
 
 /**
  * 博客的内容层。
@@ -23,6 +24,7 @@ export type PostMetadata = {
 
 export type Post = PostMetadata & {
   slug: string; // 文件名（不含扩展名），也是 URL 的一部分
+  readingTime?: number; // 估算阅读时长（分钟）
 };
 
 function isPostFile(fileName: string): boolean {
@@ -38,8 +40,11 @@ export function getAllPosts(): Post[] {
   const posts = files.map((fileName): Post => {
     const slug = fileName.replace(/\.mdx$/, "");
     const raw = fs.readFileSync(path.join(POSTS_DIR, fileName), "utf8");
-    const metadata = parseMetadata(raw);
-    return { ...metadata, slug };
+    return {
+      ...parseMetadata(raw),
+      slug,
+      readingTime: getReadingTime(raw),
+    };
   });
 
   return posts
@@ -53,7 +58,80 @@ export function getPostBySlug(slug: string): Post | null {
   if (!fs.existsSync(filePath)) return null;
 
   const raw = fs.readFileSync(filePath, "utf8");
-  return { ...parseMetadata(raw), slug };
+  return {
+    ...parseMetadata(raw),
+    slug,
+    readingTime: getReadingTime(raw),
+  };
+}
+
+/* ---------------------------------------------------------------- 目录 --- */
+
+export type TocItem = {
+  id: string; // 对应标题元素的 id，用于锚点跳转
+  text: string;
+  depth: 2 | 3; // 只收录 h2 / h3，h1 已被页头占用
+};
+
+/**
+ * 从 MDX 源码里提取目录。
+ *
+ * 关键点：锚点 id 必须和 rehype-slug 实际渲染出来的 id 一致，否则点击跳转失效。
+ * rehype-slug 内部用的就是 github-slugger，所以这里也用同一个库、
+ * 同一个实例顺序（同一个 slugger 连续调用才能正确处理重复标题的 -1、-2 后缀）。
+ */
+export function getTableOfContents(slug: string): TocItem[] {
+  const filePath = path.join(POSTS_DIR, `${slug}.mdx`);
+  if (!fs.existsSync(filePath)) return [];
+
+  const source = fs.readFileSync(filePath, "utf8");
+  const slugger = new GithubSlugger();
+  const items: TocItem[] = [];
+
+  // 逐行匹配 Markdown 标题，跳过代码块内部（``` 之间的 # 不是标题）
+  let inCodeBlock = false;
+  for (const line of source.split("\n")) {
+    if (/^\s*```/.test(line)) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
+
+    const match = /^(#{2,3})\s+(.+?)\s*#*$/.exec(line);
+    if (!match) continue;
+
+    const depth = match[1].length as 2 | 3;
+    const text = match[2]
+      // 去掉行内代码和链接语法，只留纯文本
+      .replace(/`([^`]*)`/g, "$1")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/[*_~]/g, "")
+      .trim();
+
+    if (text) items.push({ id: slugger.slug(text), text, depth });
+  }
+
+  return items;
+}
+
+/* ------------------------------------------------------------ 阅读时长 --- */
+
+/**
+ * 估算阅读时长。中文字数按 400 字/分钟算，比英文的 200 词/分钟更接近实际。
+ * 只用作提示，不追求精确。
+ */
+export function getReadingTime(source: string): number {
+  // 先去掉代码块和标记符号，避免把代码算进字数
+  const text = source
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]*`/g, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/[#*_>\-\[\]()]/g, " ");
+
+  const cjk = text.match(/[一-龥]/g)?.length ?? 0;
+  const words = text.match(/[a-zA-Z0-9]+/g)?.length ?? 0;
+
+  return Math.max(1, Math.round(cjk / 400 + words / 200));
 }
 
 /** 所有标签及其文章数，按文章数从多到少。 */
@@ -100,7 +178,6 @@ function parseMetadata(source: string): PostMetadata {
     .replace(/,(\s*[}\]])/g, "$1");
 
   try {
-    // eslint-disable-next-line no-new-func
     const value = new Function(`return ${jsonLike}`)() as PostMetadata;
     return {
       title: value.title ?? "未命名文章",
