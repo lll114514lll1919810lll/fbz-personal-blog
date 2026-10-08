@@ -173,31 +173,9 @@ html {
   color: var(--secondary);
 }
 
-.prose code {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 0.12em 0.38em;
-  border-radius: 4px;
-  font-size: 0.88em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-.prose pre {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 1.1rem 1.25rem;
-  border-radius: 8px;
-  overflow-x: auto;
-  line-height: 1.7;
-}
-
-.prose pre code {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font-size: 0.855rem;
-  color: var(--foreground);
-}
+/* 代码块的样式全部由 .code-block 一族接管（见文件末尾），
+   这里不再给 .prose pre / .prose code 设样式，
+   避免和工具条、双主题规则打架。行内代码见文件末尾的 :not(pre) 选择器。 */
 
 .prose img {
   border-radius: 8px;
@@ -234,6 +212,167 @@ html {
 .prose li > input[type="checkbox"] {
   margin-right: 0.45rem;
   accent-color: var(--accent);
+}
+
+/* ============================================================================
+   代码块
+   高亮由构建期的 Shiki 完成（见 next.config.ts），颜色写在 CSS 变量里。
+   ========================================================================= */
+
+.code-block {
+  position: relative;
+  margin-top: 1.5em;
+}
+
+.code-block pre {
+  /* 覆盖 .prose pre 的默认样式：这里需要为工具条留出顶部空间 */
+  margin: 0;
+  padding: 2.6rem 1.25rem 1.15rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-x: auto;
+  line-height: 1.7;
+  position: relative;
+}
+
+.code-block pre:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 工具条：语言标签 + 复制按钮，默认低调，悬停代码块时浮现 */
+.code-block-toolbar {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.6rem;
+  left: 0.9rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.code-block-lang {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  text-transform: lowercase;
+  user-select: none;
+}
+
+.code-block-copy {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  font-family: inherit;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+/* 键盘用户没有 hover，用 :focus-within 让它始终可见 */
+.code-block:focus-within .code-block-copy {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .code-block:hover .code-block-copy {
+    opacity: 1;
+  }
+}
+
+.code-block-copy:hover {
+  color: var(--foreground);
+  background: var(--background);
+  border-color: var(--border);
+}
+
+.code-block-copy[data-copied] {
+  color: var(--accent);
+}
+
+/* 右侧渐变：代码横向溢出时提示还有内容 */
+.code-block-fade {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 2.5rem;
+  pointer-events: none;
+  border-radius: 0 9px 9px 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--surface) 78%
+  );
+}
+
+/* --- Shiki 双主题 -------------------------------------------------------
+   next.config.ts 里设了 defaultColor:false，Shiki 因此不直接给元素上色，
+   而是给每个 token 写出两套颜色：
+     --shiki-light（浅色下的颜色）
+     --shiki-dark （深色下的颜色，默认写在 color 里）
+
+   下面这段是官方文档里的标准写法，缺一不可：
+     1. span 也要匹配——只给 pre 设color 的话，代码还是全黑
+     2. data-theme 属性带空格（如 "github-light github-dark"）
+        表示这是双主题代码块，用 *= 匹配
+
+   背景色刻意不取 Shiki 的 --shiki-light-bg / --shiki-dark-bg：
+   github-light 是纯白、github-dark 是 #24292e，
+   直接用会让代码块和站点的 --surface 脱节、破坏整体配色。
+   切换配色纯靠 CSS，无 JS、无闪烁。
+   ---------------------------------------------------------------------- */
+
+@media (prefers-color-scheme: light) {
+  .code-block pre[data-theme*=" "],
+  .code-block pre[data-theme*=" "] span {
+    color: var(--shiki-light);
+  }
+}
+
+/* 深色下 Shiki 把颜色写进 --shiki-dark，同样需要显式应用到 color，
+   否则 span 会继承 pre 的前景色，代码全部同色。 */
+@media (prefers-color-scheme: dark) {
+  .code-block pre[data-theme*=" "],
+  .code-block pre[data-theme*=" "] span {
+    color: var(--shiki-dark);
+  }
+}
+
+/* 行内代码：用 :not(pre) 精确排除代码块内部的 code，
+   代码块内的样式由外层 pre 统一处理 */
+.prose :not(pre) > code {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.12em 0.38em;
+  border-radius: 4px;
+  font-size: 0.88em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.prose pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 0.855rem;
 }
 
 /* ============================================================================

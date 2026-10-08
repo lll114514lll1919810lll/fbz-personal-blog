@@ -92,8 +92,42 @@ export const metadata = {
 | 阅读进度条 | `reading-progress.tsx` | 顶部 1.5px 细线，用 `rAF` 节流避免滚动掉帧 |
 | 悬停微交互 | `post-card.tsx` | 列表项悬停时泛底色、横线延展、摘要和标签淡入 |
 | 正文宽度调节 | `post-body.tsx` | 文章页可切换窄/标准/宽三档，选择记在 localStorage |
+| 代码高亮 | `next.config.ts` + Shiki | 构建期高亮，明暗双主题跟随系统，零客户端 JS |
+| 代码块交互 | `code-block.tsx` | 复制按钮、语言标签、横向滚动渐变提示 |
 
 改配色只需动 `globals.css` 顶部的 CSS 变量，明暗两套值一一对应。
+
+### 代码高亮与复制
+
+代码块由 **Shiki**（VS Code 同款引擎）在**构建期**完成高亮，产物就是静态 HTML，
+不加载任何客户端 JS。
+
+**明暗双主题**：`next.config.ts` 里设了 `defaultColor: false`，Shiki 会给每个 token
+同时写出 `--shiki-light` 和 `--shiki-dark` 两套颜色，由 CSS 按系统配色选用：
+
+```css
+@media (prefers-color-scheme: light) {
+  .code-block pre[data-theme*=" "],
+  .code-block pre[data-theme*=" "] span {
+    color: var(--shiki-light);
+  }
+}
+```
+
+这段规则有两个容易踩的点：
+
+- **`span` 也必须匹配**。只给 `pre` 设 `color` 的话，代码会全部继承同一个颜色，
+  看起来像没高亮。
+- **不能取 Shiki 自带的背景色**。github-light 是纯白、github-dark 是 `#24292e`，
+  直接用会让代码块和站点的 `--surface` 脱节、破坏整体配色。
+  背景统一由 `.code-block pre` 提供，只借用它的语法配色。
+
+**语言标记**：不写的话会被当作纯文本（不着色，但仍显示复制按钮）。
+支持 `ts` `tsx` `js` `jsx` `json` `bash` `css` `html` `md` `mdx` `python` `rust` 等。
+
+**复制按钮**：悬停或键盘聚焦时显示，点击后变「已复制」两秒。
+注意浏览器剪贴板 API 只在 HTTPS / localhost 可用，局域网 IP 以 http 访问时会静默失败，
+此时仍可手动选中复制。
 
 ### 正文宽度调节
 
