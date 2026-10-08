@@ -407,5 +407,57 @@ CSS 里还处理了两个容易被忽略的点：
 
 ## 部署
 
-还没配部署，本地跑通即可。需要上线时告诉我目标平台
-（GitHub Pages / Vercel / Cloudflare），我再补配置。
+站点是**纯静态**的，托管在 Cloudflare Pages，正式域名 <https://blog.mclll114.me>。
+
+### 静态导出开关
+
+`next.config.ts` 里导出行为由环境变量 `NEXT_OUTPUT` 控制：
+
+```bash
+NEXT_OUTPUT=export pnpm build   # 产出 out/，供 Cloudflare Pages 部署
+pnpm build                      # 本地普通构建，pnpm start 可正常预览
+```
+
+**不能无条件写 `output: "export"`**：静态导出后产物里没有 Node 服务器，
+`pnpm start` 会直接失效，本地就没法预览了。用环境变量隔开，
+两条命令各管各的场景。
+
+导出时同时开了 `trailingSlash: true`，产物是目录形式
+（`/about/index.html` 而不是 `/about.html`）。这样任何静态托管或 CDN 都能
+零配置映射「目录 → index.html」，日后要加国内 CDN 镜像时路径规则天然一致。
+
+### Cloudflare Pages 后台配置
+
+| 配置项 | 值 |
+| --- | --- |
+| 框架预设 | Next.js (Static HTML Export) |
+| 构建命令 | `NEXT_OUTPUT=export pnpm build` |
+| 构建目录 | `out` |
+| 生产分支 | `main` |
+
+DNS 用子域名接入，阿里云 DNS 保持不动，加一条 CNAME 指向
+`<项目名>.pages.dev` 即可，不需要改 NS（顶级域才必须改 NS）。
+
+### 部署后的注意事项
+
+- **别在自定义域名上加缓存规则。** Pages 内置缓存已经够用，资产在 CDN 上
+  TTL 是一周且可能随时失效；自定义缓存规则可能在部署后仍返回旧资源。
+- **中文标签页要手动点一下确认。** 产物文件名是原始 UTF-8（`tags/技术/index.html`），
+  而站内链接用 `encodeURIComponent` 编码。这依赖 Cloudflare 把编码路径映射回
+  UTF-8 文件名——官方支持，但属于平台行为而非本项目代码保证。
+- **改域名或文章后要 push 才生效。** Pages 每次推送才重新构建，
+  `lib/site.ts` 里的 `url` 会进 sitemap、robots 和 OG 分享卡片。
+
+### sitemap 与 robots
+
+`app/sitemap.ts` 和 `app/robots.ts` 在构建期生成，域名统一取自
+`lib/site.ts` 的 `siteConfig.url`——**只有这一个来源**，改域名只改那一处。
+
+两个文件都必须写 `export const dynamic = "force-static"`：静态导出下
+元数据路由不显式声明就会构建失败（`not configured on route "/robots.txt"`）。
+
+### 国内访问
+
+Cloudflare 免费版**没有中国大陆节点**，绑定自有域名只是降低被干扰概率，
+不等于加速——境内访问仍会绕到香港/日本节点。要真正解决必须境内服务器
+加 ICP 备案，免费方案做不到这一点。
