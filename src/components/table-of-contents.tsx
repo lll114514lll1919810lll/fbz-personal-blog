@@ -72,17 +72,44 @@ function Sidebar({ items }: { items: TocItem[] }) {
   const activeId = useActiveHeading(items);
   const tree = useMemo(() => buildTree(items), [items]);
 
-  // 记录哪些分组处于展开状态。默认全空 = 全部折叠。
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /**
+   * 手动展开的分组（只记一个）。
+   *
+   * 展开状态分两种来源：
+   * 1. 当前正在读的章节 —— 强制展开，不受这个 state 控制
+   * 2. 用户手动点开的非当前章节 —— 记在这里
+   *
+   * 只保留一个手动项，配合「切换章节时清空」的规则，
+   * 同一时刻最多只有一个分组是展开的，目录始终紧凑。
+   */
+  const [manualId, setManualId] = useState<string | null>(null);
 
   // 滚动到某个三级标题时，自动展开它所属的分组，
   // 否则高亮的条目在折叠状态下看不见，读者会困惑「高亮去哪了」。
   const activeNode = tree.find(
     (n) => n.id === activeId || n.children.some((c) => c.id === activeId),
   );
+  const activeGroupId = activeNode?.id ?? null;
 
   // 侧栏自身也可能超长（展开多个分组后），需要能被滚动到可视区
   const navRef = useRef<HTMLElement>(null);
+
+  /**
+   * 切换章节时清掉手动展开项。
+   *
+   * 这是「之前章节自动收起，无视用户是否手动展开过」的实现：
+   * 读者翻到新章节后，上一章展开的子项不再需要，留着只会占地方、
+   * 让人分不清哪些是当前章节的内容。
+   *
+   * 用渲染期比较而不是 useEffect：effect 里同步 setState 会多渲染一轮，
+   * 也触发 react-hooks/set-state-in-effect。这也是 React 官方推荐的
+   * 「props 变化时重置 state」写法。
+   */
+  const [prevActiveGroup, setPrevActiveGroup] = useState<string | null>(null);
+  if (activeGroupId !== prevActiveGroup) {
+    setPrevActiveGroup(activeGroupId);
+    setManualId(null);
+  }
 
   // 展开的分组也跟着高亮项走：展开后如果条目在侧栏可视区外，
   // 读者看不到自己刚展开了什么
@@ -93,7 +120,7 @@ function Sidebar({ items }: { items: TocItem[] }) {
       `a[aria-current="location"]`,
     );
     if (activeEl) scrollIntoViewIfNeeded(activeEl, nav);
-  }, [activeId, expanded]);
+  }, [activeId, manualId]);
 
   /**
    * 点击目录项：拦截原生锚点跳转，改用缓动滚动。
@@ -111,20 +138,16 @@ function Sidebar({ items }: { items: TocItem[] }) {
     window.history.replaceState(null, "", `#${encodeURIComponent(id)}`);
   };
 
-  const toggle = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
+  /** 展开状态：当前章节强制展开，其余看手动项 */
   const isOpen = (node: TocNode) =>
-    expanded.has(node.id) ||
-    // 当前高亮落在该分组内时，强制展开
-    (activeNode?.id === node.id &&
-      node.children.some((c) => c.id === activeId));
+    node.id === activeGroupId || node.id === manualId;
+
+  /** 当前章节的按钮置灰不可点：收起它也只会被强制展开，徒增困惑 */
+  const isLocked = (node: TocNode) => node.id === activeGroupId;
+
+  const toggle = (id: string) => {
+    setManualId((prev) => (prev === id ? null : id));
+  };
 
   return (
     <nav
@@ -149,6 +172,7 @@ function Sidebar({ items }: { items: TocItem[] }) {
       <ul className="space-y-0.5">
         {tree.map((node) => {
           const open = isOpen(node);
+          const locked = isLocked(node);
           const hasChildren = node.children.length > 0;
           const active = activeId === node.id;
 
@@ -181,10 +205,26 @@ function Sidebar({ items }: { items: TocItem[] }) {
                 {hasChildren && (
                   <button
                     type="button"
-                    onClick={() => toggle(node.id)}
+                    /*
+                      当前章节的按钮置灰且不可点：它的展开是自动的，
+                      点了收起也会被立刻强制展开，让人以为按钮坏了。
+                      用 aria-disabled 而不是 disabled —— disabled 会让
+                      按钮失去焦点，键盘用户会以为这里没有控件。
+                    */
+                    onClick={locked ? undefined : () => toggle(node.id)}
                     aria-expanded={open}
-                    aria-label={`${open ? "收起" : "展开"}${node.text}的子章节`}
-                    className="-ml-px flex shrink-0 items-center self-stretch border-l border-transparent py-1.5 pl-1.5 text-muted transition-colors hover:text-foreground"
+                    aria-disabled={locked || undefined}
+                    aria-label={
+                      locked
+                        ? `${node.text}的子章节（当前章节，自动展开）`
+                        : `${open ? "收起" : "展开"}${node.text}的子章节`
+                    }
+                    title={locked ? "当前所在章节，自动展开" : undefined}
+                    className={`-ml-px flex shrink-0 items-center self-stretch border-l border-transparent py-1.5 pl-1.5 transition-opacity ${
+                      locked
+                        ? "cursor-default text-muted opacity-45"
+                        : "text-muted hover:text-foreground"
+                    }`}
                   >
                     <svg
                       width="10"
@@ -281,19 +321,25 @@ function Collapsible({ items }: { items: TocItem[] }) {
   const [open, setOpen] = useState(false);
   const activeId = useActiveHeading(open ? items : []);
   const tree = useMemo(() => buildTree(items), [items]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // 与桌面端同一套规则：当前章节强制展开，手动项只记一个，
+  // 切换章节时清空（上一章自动收起）
+  const [manualId, setManualId] = useState<string | null>(null);
 
   const activeNode = tree.find(
     (n) => n.id === activeId || n.children.some((c) => c.id === activeId),
   );
+  const activeGroupId = activeNode?.id ?? null;
+
+  // 与桌面端同一套规则：章节变了就清掉手动展开项（上一章自动收起）
+  const [prevActiveGroup, setPrevActiveGroup] = useState<string | null>(null);
+  if (activeGroupId !== prevActiveGroup) {
+    setPrevActiveGroup(activeGroupId);
+    setManualId(null);
+  }
 
   const toggleGroup = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setManualId((prev) => (prev === id ? null : id));
   };
 
   return (
@@ -337,10 +383,8 @@ function Collapsible({ items }: { items: TocItem[] }) {
             <ul className="space-y-0.5">
               {tree.map((node) => {
             const hasChildren = node.children.length > 0;
-            const groupOpen =
-              expanded.has(node.id) ||
-              (activeNode?.id === node.id &&
-                node.children.some((c) => c.id === activeId));
+            const locked = node.id === activeGroupId;
+            const groupOpen = node.id === activeGroupId || node.id === manualId;
 
             return (
               <li key={node.id || node.text}>
@@ -370,10 +414,20 @@ function Collapsible({ items }: { items: TocItem[] }) {
                   {hasChildren && (
                     <button
                       type="button"
-                      onClick={() => toggleGroup(node.id)}
+                      onClick={locked ? undefined : () => toggleGroup(node.id)}
                       aria-expanded={groupOpen}
-                      aria-label={`${groupOpen ? "收起" : "展开"}${node.text}的子章节`}
-                      className="flex shrink-0 items-center self-stretch py-1.5 pl-2 text-muted transition-colors hover:text-foreground"
+                      aria-disabled={locked || undefined}
+                      aria-label={
+                        locked
+                          ? `${node.text}的子章节（当前章节，自动展开）`
+                          : `${groupOpen ? "收起" : "展开"}${node.text}的子章节`
+                      }
+                      title={locked ? "当前所在章节，自动展开" : undefined}
+                      className={`flex shrink-0 items-center self-stretch py-1.5 pl-2 transition-opacity ${
+                        locked
+                          ? "cursor-default text-muted opacity-45"
+                          : "text-muted hover:text-foreground"
+                      }`}
                     >
                       <svg
                         width="10"
