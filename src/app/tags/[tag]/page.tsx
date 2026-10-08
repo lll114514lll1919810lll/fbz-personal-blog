@@ -55,9 +55,10 @@ export default async function TagPage({ params }: PageProps<"/tags/[tag]">) {
         <TagFilterBar tags={getAllTags()} activeTag={decoded} />
       </section>
 
-      {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线） */}
+      {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线）。
+          与文章列表页、首页「最近更新」保持同一套：1 / 2 / 3 列 */}
       {posts.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {posts.map((post) => (
             <PostCard key={post.slug} post={post} />
           ))}

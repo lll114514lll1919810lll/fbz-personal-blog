@@ -35,9 +35,11 @@ export default function BlogPage() {
         <TagFilterBar tags={tags} />
       </section>
 
-      {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线） */}
+      {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线）。
+          手机 1 列、平板 2 列、电脑 3 列：768px 下三列每张只剩 ~230px，
+          封面和标题会挤成一团，所以三列从 lg(1024px) 才开始。 */}
       {posts.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {posts.map((post) => (
             <PostCard key={post.slug} post={post} />
           ))}

@@ -104,8 +104,9 @@ export default function HomePage() {
           </div>
           <span className="text-sm text-muted">{posts.length} 篇</span>
         </div>
+        {/* 手机 1 列 / 平板 2 列 / 电脑 3 列，与文章列表页保持一致 */}
         {latest.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {latest.map((post) => <PostCard key={post.slug} post={post} />)}
           </div>
         ) : (
