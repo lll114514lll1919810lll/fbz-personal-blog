@@ -2,11 +2,24 @@ export const metadata = {
   title: "用 MDX 写文章的正确姿势",
   date: "2026-10-06",
   publishedAt: "2026-10-06T09:00",
-  description: "这个博客的文章格式、frontmatter 写法，以及 MDX 和普通 Markdown 的区别。",
+  description: "这个博客的文章格式、元信息写法、配图方式，以及 MDX 和普通 Markdown 的区别。",
   tags: ["技术", "写作"],
 }
 
 这个博客的文章都放在 `src/content/` 目录下，每篇就是一个 `.mdx` 文件。
+
+## 文件名就是网址
+
+文件名去掉 `.mdx` 就是这篇的 slug，直接拼在 `/blog/` 后面。目录里的文件带 `1-`、`2-`
+这样的数字前缀，那是为了在编辑器里按顺序排列，**前缀本身也是网址的一部分**：
+
+```text
+1-hello-world.mdx            →  /blog/1-hello-world
+2-how-to-write-with-mdx.mdx  →  /blog/2-how-to-write-with-mdx
+```
+
+前缀不会被自动去掉。所以改文件名等于改网址，已经发出去的链接会失效——真要改的话，
+记得顺手处理一下旧地址。
 
 ## 文件头是必须的
 
@@ -14,6 +27,7 @@ export const metadata = {
 export const metadata = {
   title: "文章标题",
   date: "2026-10-05",
+  publishedAt: "2026-10-05T14:30",
   description: "一句话摘要，会显示在列表页和分享卡片上",
   tags: ["技术", "写作"],
 }
@@ -25,9 +39,13 @@ export const metadata = {
 
 - `title` — 必填，文章标题
 - `date` — 必填，格式 `YYYY-MM-DD`，用于排序
+- `publishedAt` — 可选，ISO 8601 时间戳（如 `2026-10-05T14:30`）
 - `description` — 建议填，列表页摘要和 SEO 描述都用它
 - `tags` — 可选，标签页会按它归类
 - `draft` — 可选，设为 `true` 时这篇不会出现在列表和构建产物里
+
+排序是先比 `publishedAt`，没填的退回 `date`；两者都相同再按 slug 排，保证顺序稳定。
+所以**只写 `date` 也够用**，`publishedAt` 是留给「同一天发好几篇」时定先后的。
 
 ## 正文里不要写一级标题
 
@@ -62,21 +80,50 @@ export const metadata = {
 - [x] 写第一篇文章
 - [ ] 部署上线
 
-## 关于代码高亮
+## 怎么配图
 
-这个博客目前没有配置语法高亮插件，代码块会以等宽字体原样显示。如果以后需要，可以装 `rehype-pretty-code`：
+图片放到 `public/` 里，正文用 `<figure>` 把图片和图注包在一起：
 
-```ts
-const withMDX = createMDX({
-  options: {
-    remarkPlugins: ["remark-gfm"],
-    rehypePlugins: ["rehype-slug", "rehype-pretty-code"],
-  },
-})
+```mdx
+<figure className="post-figure">
+  <img
+    src="/images/my-post/step-1.jpg"
+    alt="easy-proxies 仪表盘，显示池内端口 27 个、失败 5 个"
+    width={1800}
+    height={989}
+  />
+  <figcaption>图 1：导入订阅后自动测速的结果。</figcaption>
+</figure>
 ```
 
-注意插件名必须是**字符串**，这是 Turbopack 的限制——它没法把 JavaScript 函数传给 Rust 那边。
+`src` 写 `/images/...` 就对应仓库里的 `public/images/...`。建议按文章分目录放，
+不要都堆在 `public/` 根下。
+
+四个容易踩的点：
+
+- **`className="post-figure"` 不能省。** 配图样式挂在 `.post-figure` 上，而不是挂在
+  `figure` 上——代码高亮插件也会用 `<figure>` 来包代码块，写成泛匹配会把代码块的
+  外边距一起改掉。
+- **`<img>` 要自己闭合**（` />`）。MDX 按 JSX 解析，这里不是 HTML。
+- **`width` / `height` 建议写上。** 浏览器拿它预留位置，图片加载完之前页面不会跳动。
+- **`alt` 要认真写。** 它既是图片加载失败时的替代文字，也是屏幕阅读器读出来的内容。
+
+图注里可以嵌 `<code>` 这类标签，但**不要写 Markdown**——`<figure>` 内部按 JSX 解析，
+`**加粗**` 不会生效，得写成 `<strong>加粗</strong>`。
+
+## 代码高亮
+
+代码块由 Shiki 在构建期高亮，明暗双主题、复制按钮、语言标签都是现成的，
+写带语言标记的围栏即可：
+
+```ts
+const answer = 42
+```
+
+支持哪些语言、不写语言标记会怎样、复制按钮在 http 下为什么没反应，
+这些都写在 [语法高亮与代码块](/blog/3-code-blocks-guide) 里。
 
 ## 小结
 
-写文章这件事现在简化成：新建文件 → 写元信息 → 写正文。保存后浏览器会自动刷新。
+写文章这件事现在简化成：新建文件 → 写元信息 → 写正文，配图就多包一层 `<figure>`。
+保存后浏览器会自动刷新。
