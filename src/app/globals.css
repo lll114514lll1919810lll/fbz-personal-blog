@@ -1189,6 +1189,12 @@ html {
   box-shadow: inset 0 1px 0 var(--panel-highlight);
   backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
   overflow-x: auto;
+  /* 纵向永远不滚：代码块按内容撑高，折叠靠 max-height 截断。
+     写在这里而不是只在折叠态写，展开动画过程中才不会闪出滚动条。 */
+  overflow-y: hidden;
+  /* 折叠 / 展开的高度过渡。展开时的目标高度由 JS 量出来后写成内联
+     max-height，收起时是下面那条 18rem——两端都是具体长度才过渡得起来。 */
+  transition: max-height 0.3s ease;
   line-height: 1.7;
   position: relative;
 }
@@ -1308,17 +1314,20 @@ html {
    18rem 大约露出 9 行，够认出这段是什么。给折叠按钮设的入场门槛是
    420px（约 17 行），所以真正会收起的长块至少能省下三分之一的高度。
 
-   overflow-y 必须显式写 hidden：另一轴是 auto 时，纵向会被规范算成
-   auto，那样折叠块自己长出滚动条，折叠就没意义了。
+   这里只给出收起态的目标高度，展开态的高度由组件量出来写成内联
+   max-height。两端都是长度值，.code-block pre 上那条 transition
+   才动得起来。overflow-y: hidden 已经提到 .code-block pre 上，
+   放在这里的话展开动画一开始就会闪出滚动条。
    ---------------------------------------------------------------------- */
 
 .code-block.is-collapsed pre {
   max-height: 18rem;
-  overflow-y: hidden;
 }
 
 /* 底部渐变：提示下面还有内容没显示完。
-   和右侧渐变同理，横向有滚动条时要让出 11px，否则会被滚动条压住。 */
+   和右侧渐变同理，横向有滚动条时要让出 11px，否则会被滚动条压住。
+
+   透明度跟着折叠动画走：展开时淡出，和高度一起收尾，不会先一步消失。 */
 .code-block-collapse-fade {
   position: absolute;
   left: 1px;
@@ -1329,6 +1338,11 @@ html {
   pointer-events: none;
   border-radius: 0 0 9px 9px;
   background: linear-gradient(to top, var(--surface), transparent);
+  transition: opacity 0.3s ease;
+}
+
+.code-block-collapse-fade[data-hidden] {
+  opacity: 0;
 }
 
 .code-block.is-collapsed[data-overflow-x] .code-block-collapse-fade {

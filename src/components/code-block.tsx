@@ -30,17 +30,22 @@ export function CodeBlock({
   ...props
 }: CodeBlockProps) {
   // data-language 已经转成 language 单独用了，从透传里剔除，
-  // 避免同一个属性既写到外层容器又写到 pre 上
-  const { ["data-language"]: _discard, ...rest } = props as Record<
-    string,
-    unknown
-  >;
+  // 避免同一个属性既写到外层容器又写到 pre 上。
+  // style 也要单独拿出来：rehype-pretty-code 会往 pre 上写 Shiki 的
+  // CSS 变量，直接 {...rest} 展开会把下面那条 maxHeight 整个盖掉。
+  const {
+    ["data-language"]: _discard,
+    style: incomingStyle,
+    ...rest
+  } = props as Record<string, unknown>;
   void _discard;
   const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
   /** 够不够高、值不值得给一个折叠按钮 */
   const [foldable, setFoldable] = useState(false);
+  /** 内容总高。展开时写成内联 max-height，折叠动画才有过渡的目标值 */
+  const [fullHeight, setFullHeight] = useState<number>();
   /** 默认展开；只有用户点了折叠才会变 true */
   const [collapsed, setCollapsed] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,9 +59,11 @@ export function CodeBlock({
     const check = () => {
       // 留 1px 容差，避免亚像素误差导致的误判
       setOverflowing(el.scrollWidth > el.clientWidth + 1);
-      // scrollHeight 是内容总高，不受 max-height 限制，
-      // 所以折叠状态下量到的仍是完整高度，按钮不会自己消失
-      setFoldable(el.scrollHeight > FOLD_MIN_HEIGHT);
+      // scrollHeight 是内容总高，不受 max-height 限制。所以折叠状态下
+      // 量到的仍是完整高度：按钮不会自己消失，展开动画的目标值也一直准
+      const h = el.scrollHeight;
+      setFullHeight(h);
+      setFoldable(h > FOLD_MIN_HEIGHT);
     };
 
     check();
@@ -140,6 +147,22 @@ export function CodeBlock({
         id={bodyId}
         className={className}
         tabIndex={0}
+        /*
+          展开时把量到的内容总高写成内联 max-height，收起时交给
+          .is-collapsed 里那条 18rem。两边都得是具体长度，CSS 才能从
+          当前高度过渡过去，max-height: none 是没法参与过渡的。
+          +2px 给子像素留余量，免得正好卡在边界上裁掉最后一行。
+          不够高的代码块不加这条，保持原样。
+
+          incomingStyle 是 Shiki 写在 pre 上的 CSS 变量，要合并进来，
+          而且 maxHeight 必须排在它后面才不会被盖掉。
+        */
+        style={{
+          ...(incomingStyle as React.CSSProperties | undefined),
+          ...(foldable && fullHeight && !collapsed
+            ? { maxHeight: fullHeight + 2 }
+            : undefined),
+        }}
         {...rest}
       >
         {children}
@@ -150,9 +173,15 @@ export function CodeBlock({
         <div className="code-block-fade" aria-hidden />
       )}
 
-      {/* 底部渐变：折叠时提示下面还有内容 */}
-      {foldable && collapsed && (
-        <div className="code-block-collapse-fade" aria-hidden />
+      {/* 底部渐变：折叠时提示下面还有内容。
+          常挂在树上、用 data-hidden 控制透明度，展开时才能跟着淡出；
+          按 collapsed 条件渲染的话它会比高度动画先一步消失。 */}
+      {foldable && (
+        <div
+          className="code-block-collapse-fade"
+          data-hidden={!collapsed || undefined}
+          aria-hidden
+        />
       )}
     </div>
   );
