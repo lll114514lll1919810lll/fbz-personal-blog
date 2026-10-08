@@ -1,10 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { ArticleImages } from "@/components/article-images";
 import { BackToTop } from "@/components/back-to-top";
 import { TableOfContents } from "@/components/table-of-contents";
-import { READING_WIDTHS, useReadingWidth } from "@/lib/reading-width";
+import {
+  READING_WIDTHS,
+  useCharsPerLine,
+  useReadingWidth,
+} from "@/lib/reading-width";
 import type { TocItem } from "@/lib/posts";
 
 /**
@@ -31,6 +35,9 @@ export function PostBody({
   children: ReactNode;
 }) {
   const { widthId, setWidth } = useReadingWidth();
+  // 「每行多少字」得按正文列的真实宽度算，所以 ref 挂在下面的 .prose 上
+  const proseRef = useRef<HTMLDivElement>(null);
+  const charsPerLine = useCharsPerLine(proseRef);
   const width =
     READING_WIDTHS.find((w) => w.id === widthId) ?? READING_WIDTHS[1];
   const currentIndex = READING_WIDTHS.findIndex((w) => w.id === widthId);
@@ -58,10 +65,12 @@ export function PostBody({
         >
           {header}
 
-          <div className="pb-4">
+          {/* 窄屏不显示这条：手机上正文本来就只有一列宽，可调的余地很小，
+              而这条控制线要占掉整整两行高度，压在正文前面不划算。 */}
+          <div className="hidden pb-4 sm:block">
             <WidthControl
               label={width.label}
-              hint={width.hint}
+              charsPerLine={charsPerLine}
               currentIndex={currentIndex}
               onSelect={(id) => setWidth(id)}
               onAdvance={() => setWidth(next.id)}
@@ -71,7 +80,11 @@ export function PostBody({
 
           {/* data-article-prose 是配图放大组件的挂载点：
               正文是 MDX 出来的裸 HTML，只能挂载后再去增强其中的 <img> */}
-          <div className="prose border-t border-border pt-9" data-article-prose>
+          <div
+            ref={proseRef}
+            className="prose border-t border-border pt-9"
+            data-article-prose
+          >
             {children}
           </div>
 
@@ -101,24 +114,27 @@ export function PostBody({
 /** 宽度调节条：把当前说明、档位轨道和切换入口合并成一条控制线。 */
 function WidthControl({
   label,
-  hint,
+  charsPerLine,
   currentIndex,
   onSelect,
   onAdvance,
   nextLabel,
 }: {
   label: string;
-  hint: string;
+  /** 每行能放多少个全角字。浏览器量出来之前是 undefined，这时先不显示数字 */
+  charsPerLine?: number;
   currentIndex: number;
   onSelect: (id: (typeof READING_WIDTHS)[number]["id"]) => void;
   onAdvance: () => void;
   nextLabel: string;
 }) {
+  const size = charsPerLine ? `每行约 ${charsPerLine} 字` : "";
+
   return (
     <div className="reading-width-control" aria-label="正文宽度调节">
       <p className="reading-width-copy">
         <span>正文宽度</span>
-        <strong>{hint}</strong>
+        {size && <strong>{size}</strong>}
       </p>
 
       <div className="reading-width-track" role="radiogroup" aria-label="选择正文宽度">
@@ -135,8 +151,8 @@ function WidthControl({
             type="button"
             role="radio"
             aria-checked={i === currentIndex}
-            aria-label={`${w.label}，${w.hint}`}
-            title={`切换为「${w.label}」：${w.hint}`}
+            aria-label={w.label}
+            title={`切换为「${w.label}」`}
             onClick={() => onSelect(w.id)}
             className={`reading-width-stop ${i === currentIndex ? "is-active" : ""}`}
           >
@@ -148,7 +164,7 @@ function WidthControl({
       <button
         type="button"
         onClick={onAdvance}
-        title={`当前「${label}」：${hint}。点击切换为「${nextLabel}」`}
+        title={`当前「${label}」${size ? `，${size}` : ""}。点击切换为「${nextLabel}」`}
         className="reading-width-current"
       >
         <span>{label}</span>
@@ -171,7 +187,9 @@ function WidthControl({
       </button>
 
       <span className="sr-only">
-        正文宽度：{label}，{hint}。当前选项。点击轨道档位可直接调整，点击右侧按钮切换为{nextLabel}。
+        正文宽度：{label}
+        {size ? `，${size}` : ""}
+        。当前选项。点击轨道档位可直接调整，点击右侧按钮切换为{nextLabel}。
       </span>
     </div>
   );

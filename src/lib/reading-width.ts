@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 
 /**
  * 正文宽度的档位设置。
@@ -18,9 +24,9 @@ import { useCallback, useSyncExternalStore } from "react";
  * 想继续加宽就调这里，注意侧栏宽度在 table-of-contents.tsx 里是 w-64。
  */
 export const READING_WIDTHS = [
-  { id: "narrow", label: "窄", hint: "每行约 34 字", maxWidth: "36rem" },
-  { id: "medium", label: "标准", hint: "每行约 49 字", maxWidth: "52rem" },
-  { id: "wide", label: "宽", hint: "每行约 64 字", maxWidth: "68rem" },
+  { id: "narrow", label: "窄", maxWidth: "36rem" },
+  { id: "medium", label: "标准", maxWidth: "52rem" },
+  { id: "wide", label: "宽", maxWidth: "68rem" },
 ] as const;
 
 export type WidthId = (typeof READING_WIDTHS)[number]["id"];
@@ -82,4 +88,44 @@ export function useReadingWidth() {
   }, []);
 
   return { widthId, setWidth };
+}
+
+/**
+ * 量出正文列一行能放多少个全角字。
+ *
+ * 档位里原来写死了「每行约 34 / 49 / 64 字」，那是拿 max-width 直接除以
+ * 字号算出来的。窄屏上正文根本达不到 max-width，数字就成了空话——
+ * 手机上照样显示「每行约 64 字」，实际连一半都放不下。
+ *
+ * 现在改成量真实渲染宽度：用元素当前字体在 canvas 上量一个全角字的宽度，
+ * 再除以正文列宽。换档位、转屏、拉窗口都会重新量。
+ *
+ * 只在 ResizeObserver 的回调里写 state，不在 effect 里同步 setState：
+ * 开始观测时浏览器会立刻回调一次，首次测量由它完成，也就不必额外触发
+ * 一轮渲染（react-hooks/set-state-in-effect 也不答应）。
+ */
+export function useCharsPerLine(ref: RefObject<HTMLElement | null>) {
+  const [chars, setChars] = useState<number>();
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const measure = () => {
+      const ctx = document.createElement("canvas").getContext("2d");
+      if (!ctx) return;
+
+      const style = getComputedStyle(el);
+      ctx.font = `${style.fontSize} ${style.fontFamily}`;
+      // 量 10 个字取平均，抵消单个字形的取整误差
+      const perChar = ctx.measureText("字".repeat(10)).width / 10;
+      if (perChar > 0) setChars(Math.round(el.clientWidth / perChar));
+    };
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return chars;
 }

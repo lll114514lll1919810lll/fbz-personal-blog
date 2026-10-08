@@ -67,7 +67,7 @@ src/
 │   ├── table-of-contents.tsx 文章目录（侧栏 / 折叠两种形态）
 │   ├── use-active-heading.ts 目录滚动高亮的 hook
 │   ├── tag-filter-bar.tsx  标签筛选栏
-│   ├── code-block.tsx      代码块交互（复制 / 语言标签 / 渐变）
+│   ├── code-block.tsx      代码块交互（复制 / 语言标签 / 折叠 / 渐变）
 │   ├── site-logo.tsx       顶栏站点标识（占位圆形图标）← 换正式 logo 看这里
 │   ├── site-chrome.tsx     顶栏 / 底栏
 │   ├── theme-toggle.tsx    明暗切换开关
@@ -77,7 +77,7 @@ src/
 │   ├── site.ts             站名、导航、CONTENT_MAX_WIDTH ← 改站点信息看这里
 │   ├── theme.ts            主题的类型 / 存储键 / 首帧前生效的内联脚本
 │   ├── use-theme.ts        主题的读写、切换、订阅
-│   ├── reading-width.ts    正文宽度档位 + localStorage 持久化
+│   ├── reading-width.ts    正文宽度档位 + localStorage + 每行字数测量
 │   └── date.ts             日期格式化
 └── mdx-components.tsx      全局 MDX 组件映射
 ```
@@ -329,15 +329,39 @@ rehype-pretty-code 会往 `pre` 上写 `--shiki-*`，`{...rest}` 展开晚了会
 动画走的是普通 CSS 过渡，所以 `prefers-reduced-motion: reduce` 那条全局规则
 （把 `transition-duration` 压到 0.01ms）会自动把它关掉，不需要额外分支。
 
+**右侧渐变不能压着代码。** 代码横向溢出时右侧会浮一层渐变提示「还有内容」，
+但这层是盖在代码上的，处理不好就会吃掉最后几个字符。现在四条一起约束：
+
+- 宽 2.25rem，末端用 `color-mix()` 调成 88% 而不是实色
+- 组件监听 `scroll`，滚到最右（`scrollLeft >= scrollWidth - clientWidth - 1`）
+  就把整层撤掉，读末尾时不会有东西挡着
+- 只在真的溢出时才渲染
+- `pre` 的右内边距比左边多（2rem / 1.25rem），`code` 设成 `width: max-content`，
+  滚到底时末字离边框还有 33px
+
+**为什么光给 `pre` 加右内边距没用：** rehype-pretty-code 会给 `<code>` 写
+`display:grid`，它按 block 的宽度行为走——宽度等于容器内容宽度，超长行走的是
+「子元素溢出」。而滚动容器的可滚动溢出区是被子元素溢出撑出来的，会绕开 `pre`
+的 padding。实测滚到底时末字距离边框只有 **1px**，`padding-right` 一路加到 6rem
+也还是 1px。
+
+把 `code` 改成 `width: max-content`（配 `min-width: 100%`，保证短代码块仍然铺满
+整行、行高亮底色不会缩成一截），超长行就变成 code 自己的宽度，`pre` 的
+`padding-right` 这才成为一个真实的右边距——实测 33px。
+
+左内边距不跟着加：代码块左对齐，两边一样宽反而让每行看起来没对齐。
+
 ### 正文宽度调节
 
-文章页头部有一条宽度控制条，三档循环切换：
+文章页头部有一条宽度控制条，三档循环切换。**640px 以下整条不显示**（开关在
+`post-body.tsx` 的 `hidden sm:block`）：手机上正文本来就只有一列宽，可调余地很小，
+而这条控制线要占掉整整两行高度，压在正文前面不划算。
 
-| 档位 | 正文宽度 | 每行约 |
-| --- | --- | --- |
-| 窄 | 36rem | 34 字 |
-| 标准 | 52rem | 49 字 |
-| 宽 | 68rem | 64 字 |
+| 档位 | 正文宽度上限 |
+| --- | --- |
+| 窄 | 36rem |
+| 标准 | 52rem |
+| 宽 | 68rem |
 
 三档**等距**，每档相差 16rem。跨度必须一致，否则切档时忽大忽小手感不对。
 
@@ -346,6 +370,18 @@ rehype-pretty-code 会往 `pre` 上写 `--shiki-*`，`{...rest}` 展开晚了会
 
 用 rem 而不是 px，因为中文是全角字宽，px 宽度在不同字号下对应的字数会飘。
 档位存在 `localStorage` 的 `fbz-reading-width`，刷新和跨页都保持。
+
+**「每行约 N 字」是量出来的。** 早先这个数字是拿档位的 max-width 除以字号写死的
+（34 / 49 / 64），但窄屏上正文根本达不到 max-width，数字就成了空话——手机上照样
+显示 64 字。现在由 `useCharsPerLine()` 用 canvas 量一个全角字的实际宽度，再除以
+正文列宽；换档位、转屏、拉窗口都会重新量。
+
+实测 1280px 视口：窄 30 字、标准 45 字、宽 50 字。宽档显示 50 而不是 max-width
+换算出来的 64，因为此时正文被可用宽度（减掉目录侧栏）卡住了——这正好是旧写法
+看不出来的那部分。
+
+量的时候只往 ResizeObserver 的回调里写 state，不在 effect 里同步 setState：
+开始观测时浏览器会立刻回调一次，首次测量由它完成。
 
 实现上有两个坑值得注意：
 

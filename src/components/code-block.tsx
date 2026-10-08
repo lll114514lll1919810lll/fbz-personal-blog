@@ -42,6 +42,8 @@ export function CodeBlock({
   const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
+  /** 横向是否已经滚到最右。到了就撤掉右侧渐变，别压着最后几个字符 */
+  const [atRightEnd, setAtRightEnd] = useState(true);
   /** 够不够高、值不值得给一个折叠按钮 */
   const [foldable, setFoldable] = useState(false);
   /** 内容总高。展开时写成内联 max-height，折叠动画才有过渡的目标值 */
@@ -58,7 +60,10 @@ export function CodeBlock({
 
     const check = () => {
       // 留 1px 容差，避免亚像素误差导致的误判
-      setOverflowing(el.scrollWidth > el.clientWidth + 1);
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      setOverflowing(maxScroll > 1);
+      // 已经滚到最右就撤掉渐变：它是盖在代码上的，留着会一直压住最后几个字符
+      setAtRightEnd(el.scrollLeft >= maxScroll - 1);
       // scrollHeight 是内容总高，不受 max-height 限制。所以折叠状态下
       // 量到的仍是完整高度：按钮不会自己消失，展开动画的目标值也一直准
       const h = el.scrollHeight;
@@ -69,8 +74,12 @@ export function CodeBlock({
     check();
     const observer = new ResizeObserver(check);
     observer.observe(el);
+    el.addEventListener("scroll", check, { passive: true });
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      el.removeEventListener("scroll", check);
+    };
   }, []);
 
   // 组件卸载时清掉定时器，避免内存泄漏
@@ -168,8 +177,9 @@ export function CodeBlock({
         {children}
       </pre>
 
-      {/* 右侧渐变：只在代码横向溢出时出现，提示还有内容没显示完 */}
-      {overflowing && (
+      {/* 右侧渐变：代码横向溢出、而且右边确实还有没看到的内容时才出现。
+          滚到最右就收起来，不然最后几个字符永远压在半透明遮罩下面。 */}
+      {overflowing && !atRightEnd && (
         <div className="code-block-fade" aria-hidden />
       )}
 

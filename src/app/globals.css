@@ -369,17 +369,9 @@
     background: var(--accent-soft);
   }
 
-  @media (max-width: 640px) {
-    .reading-width-control {
-      grid-template-columns: 1fr auto;
-      gap: 0.6rem 0.8rem;
-    }
-
-    .reading-width-track {
-      grid-column: 1 / -1;
-      grid-row: 2;
-    }
-  }
+  /* 窄屏（< 640px）整条不渲染，开关在 post-body.tsx 的 hidden sm:block 上：
+     手机上正文本来就只有一列宽，可调的余地很小，而这条控制线要占掉整整
+     两行高度，压在正文前面不划算。 */
 
   .eyebrow {
     color: var(--eyebrow-color);
@@ -1175,12 +1167,31 @@ html {
   margin-top: 1.5em;
 }
 
+.code-block pre code {
+  /* rehype-pretty-code 会给 <code> 写 display:grid。
+     它默认按 block 的宽度行为走：宽度等于容器内容宽度，超长行走的是
+     「子元素溢出」。而滚动容器的可滚动溢出区由子元素溢出撑出来，会绕开
+     pre 的 padding——实测滚到底时末字距边框只有 1px，右侧 padding 调到
+     6rem 也没用。
+
+     改成 max-content 让 code 撑到最宽那行，min-width:100% 保证短代码块
+     仍然铺满整行（行高亮底色才不会缩成一小截）。这样 pre 的 padding-right
+     才真正变成滚动末尾的右边距。 */
+  width: max-content;
+  min-width: 100%;
+  /* display:grid 是内联样式写的，这里不用重复声明 */
+}
+
 .code-block pre {
   /* 覆盖 .prose pre 的默认样式：这里需要为工具条留出顶部空间 */
   margin: 0;
   /* 顶部 3.1rem 给工具条（含 32px 高的复制按钮）留出空间，
-     底部留 1.5rem 给横向滚动条，滚动条才不会紧贴最后一行代码 */
-  padding: 3.1rem 1.25rem 1.5rem;
+     底部留 1.5rem 给横向滚动条，滚动条才不会紧贴最后一行代码。
+
+     右侧比左侧多留一点：横向滚动到底时，最后几个字符要跟边框拉开距离，
+     不然会贴边、也会顶进右侧那层渐变里。左侧不需要，代码块左对齐，
+     多留反而让每行看起来缩进不齐。 */
+  padding: 3.1rem 2rem 1.5rem 1.25rem;
   /* 亚克力：代码块也是面板，但用 raised 那档（更透），
      因为它通常叠在文章面板之上，再实就显厚重了 */
   background-color: var(--panel-bg-raised);
@@ -1290,20 +1301,24 @@ html {
 }
 
 /* 右侧渐变：代码横向溢出时提示还有内容。
-   底边留出滚动条高度（8px + 一点余量），否则渐变会被滚动条压住看不见。 */
+   底边留出滚动条高度（8px + 一点余量），否则渐变会被滚动条压住看不见。
+
+   宽度收窄、末端改成半透明：这层是盖在代码上的，原来 2.75rem 宽、末端
+   还是实色，等于把最后几个字符整个吃掉。现在只提示「右边还有」，不至于
+   读不出字；真滚到最右时组件会把它整个撤掉。 */
 .code-block-fade {
   position: absolute;
   top: 1px;
   right: 1px;
   bottom: 11px;
-  width: 2.75rem;
+  width: 2.25rem;
   z-index: 1;
   pointer-events: none;
   border-radius: 0 9px 9px 0;
   background: linear-gradient(
     to right,
     transparent,
-    var(--surface) 76%
+    color-mix(in srgb, var(--surface) 88%, transparent)
   );
 }
 
