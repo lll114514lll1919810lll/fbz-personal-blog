@@ -124,6 +124,11 @@ https://opencode.ai/zen/v1   ← Authorization: Bearer public
 
 在 DSH 里打开 **插件** 页面，添加插件 `@opencode2dsh/dsh-plugin` ，点安装。
 
+<figure className="post-figure">
+  <img src="/images/dsh-opencode-free-models/01-add-plugin-dialog.jpg" alt="DSH 的「添加插件」对话框，输入框里填着 @opencode2dsh/dsh-plugin，下方是安装源选择和「安装」按钮" />
+  <figcaption>图 1：DSH 的「添加插件」对话框。填包名即可，安装源可以切到国内镜像。</figcaption>
+</figure>
+
 或者用命令行。⚠️ **桌面版不能用这条命令**——`dsh` 的 CLI 显式拒绝 `desktop` 这个 profile 名：
 
 ```js
@@ -146,6 +151,11 @@ dsh plugin --profile web add @opencode2dsh/dsh-plugin
 ### 步骤 2：确认模型出现
 
 加载插件后 DSH 会热重载，在模型选择器里应该能看到一个叫 **opencode2dsh** 的分组。
+
+<figure className="post-figure">
+  <img src="/images/dsh-opencode-free-models/02-plugin-running.jpg" alt="DSH 插件详情页：@opencode2dsh/dsh-plugin 版本 0.3.7，包含组件 1 个，状态「运行中」" />
+  <figcaption>图 2：装好后在插件列表里显示为「运行中」。本文实测的就是这个 0.3.7 版本。</figcaption>
+</figure>
 
 如果只出现 3 个模型，通常是启动时网络还没就绪。插件**只在目录完全为空时**才会重试：每 15 秒一次，最多 4 次（约 60 秒），之后转入 5 分钟的常规刷新。如果它已经抓到了几个模型但数量明显偏少，就**不会**触发这轮快速重试——那种情况得等下一轮常规刷新，或者重启 DSH。可以打开这个文件确认状态：
 
@@ -325,6 +335,11 @@ chmod +x easy_proxies
 1. 在管理界面找到"导入节点"
 2. 粘贴你的**订阅链接**
 3. 等它自动测速跑完
+
+<figure className="post-figure">
+  <img src="/images/dsh-opencode-free-models/03-easy-proxies-dashboard.jpg" alt="easy-proxies 仪表盘：代理入口 127.0.0.1:24000-24026，节点总数 32，池内端口 27，失败节点 5" />
+  <figcaption>图 3：easy-proxies 的仪表盘。32 个节点导入后自动测速，27 个进了池子、5 个失败；每个可用节点占一个本地端口。</figcaption>
+</figure>
 
 **你应该看到**：测速完成后，节点池里出现一批可用节点，每个节点被分配了一个本地端口，**从 24000 开始依次递增**。启动日志里会长这样：
 
@@ -517,6 +532,11 @@ Copy-Item config.example.json config.json
 
 ⚠️ **`webui` 是独立于 `listen` 的另一个监听端口。** 模板默认是 `"enabled": true` + `"listen": "0.0.0.0:8081"` + 明文密码 `change-this-admin-password`——等于**默认对整个局域网开放、且密码是公开的**。而它能展示上游 Key 和代理凭据，`/api/config/reveal` 还能解密明示。本文所有操作（改配置、重载代理）都能靠重启完成，用不着 WebUI，所以**最省事的做法是干脆关掉**。确实要用的话，也至少把 `enabled` 改 `false` 或把 `listen` 收到 `127.0.0.1`，并换掉那个默认密码。
 
+<figure className="post-figure">
+  <img src="/images/dsh-opencode-free-models/04-opencode2api-console.jpg" alt="opencode2api 的 WebUI「运行桌面」：左侧是 Playground、路由诊断、Token 用量等菜单，右侧「Key 池」显示 anonymous / zen / 已启用" />
+  <figcaption>图 4：opencode2api 自带的 WebUI。右边这个「Key 池」面板就是它能看到的东西——也是 4.3 节建议直接关掉它的原因。</figcaption>
+</figure>
+
 #### 4.4 把 proxies.txt 放到 config.json 旁边
 
 两个文件放在同一个目录里就行。
@@ -533,6 +553,11 @@ Copy-Item config.example.json config.json
 {"level":"INFO","msg":"server listening","component":"api","event":"server_started","address":"127.0.0.1:8080"}
 {"level":"INFO","msg":"model catalog refreshed","component":"models","event":"catalog_refreshed","models":79}
 ```
+
+<figure className="post-figure">
+  <img src="/images/dsh-opencode-free-models/05-startup-logs.jpg" alt="两个终端并排：左侧 opencode2api 输出 server listening 与 request routed 日志，右侧 easy-proxies 逐个打印 127.0.0.1:240xx 端口启动" />
+  <figcaption>图 5：左：opencode2api 启动并路由了一次请求；右：easy-proxies 为每个节点分配本地端口。窗口标题和请求 ID 已脱敏。</figcaption>
+</figure>
 
 ### 步骤 5：验证
 
@@ -726,6 +751,11 @@ admitCandidate address="127.0.0.1:24021"          → admitted=true,
 
 后果是卡片里 `exitIP`、延迟、质量分永远为空，地区过滤和延迟门槛也从不生效。
 
+<figure className="post-figure">
+  <img src="/images/dsh-opencode-free-models/06-exit-list-unprobed.jpg" alt="插件的出口列表：每行状态都是绿色的 ok，但「位置」「延迟」「质量」「出口 IP」四列全部是空的短横线" />
+  <figcaption>图 6：坑六现场。27 条出口全部显示 <code>ok</code>，但「位置 / 延迟 / 质量 / 出口 IP」四列一个值都没有——状态是构造时写死的，不代表真的探测过。</figcaption>
+</figure>
+
 **路由本身不受影响**，因为 `dispatcher.ts` 里的 `exitProxyUri()` 有这个判断：
 
 ```ts
@@ -849,4 +879,4 @@ DSH 的 profile 里可以同时注册两个 provider，共用同一批出口：
 
 ---
 
-*文中的端口、延迟、出口 IP 数量均为本机实测，不代表普遍情况。*
+*文中的端口、延迟、出口 IP 数量均为本机实测，不代表普遍情况。文中截图的窗口标题、请求 ID 和订阅标识已做脱敏处理。*
