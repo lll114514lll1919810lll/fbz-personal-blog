@@ -11,10 +11,19 @@ pnpm test:server  # 一键启动测试服务器（Windows，默认 http://localh
 pnpm build       # 生产构建（会预渲染成静态 HTML）
 pnpm start        # 预览生产构建
 
+pnpm typegen     # 生成路由类型（全新克隆必须先跑，见下）
 pnpm typecheck   # 类型检查
 pnpm lint        # 代码检查
 pnpm test        # 目录锚点一致性测试（需先启动 dev server）
 ```
+
+> **全新克隆后先跑 `pnpm typegen`，否则 `pnpm typecheck` 会报一堆
+> `Cannot find name 'PageProps'`。**
+>
+> `PageProps` / `LayoutProps` 是 Next.js 生成到 `.next/types/` 的路由类型，
+> 经 `next-env.d.ts` 引入，而后者在 `.gitignore` 里（自动生成物）。
+> 跑过 `pnpm dev` 或 `pnpm build` 之后生成物就在了，所以日常开发不会遇到，
+> 只有在新机器上才会撞到。CI 里也是先 `typegen` 再 `typecheck`。
 
 ### 一键启动测试服务器（Windows）
 
@@ -425,6 +434,28 @@ pnpm build                      # 本地普通构建，pnpm start 可正常预�
 导出时同时开了 `trailingSlash: true`，产物是目录形式
 （`/about/index.html` 而不是 `/about.html`）。这样任何静态托管或 CDN 都能
 零配置映射「目录 → index.html」，日后要加国内 CDN 镜像时路径规则天然一致。
+
+导出时还开了 `images: { unoptimized: true }`。`next/image` 默认会把图片地址
+改写成 `/_next/image?url=...` 指向服务端的优化接口，静态产物里没有这个路由，
+图片会**静默 404**（顶栏 logo 曾经就这么丢的）。注意本地 `pnpm dev` 走优化器、
+线上走原图，两者渲染结果不同，改图片相关代码后要跑一次导出构建验证。
+
+### 持续集成
+
+`.github/workflows/ci.yml` 在每次 push / PR 到 `main` 时跑：
+全新安装 → `typegen` → 类型检查 → lint → 导出构建 → 产物断言。
+
+它存在的意义是拦住**「本地一切正常、只有导出构建才暴露」**的问题。
+已经踩过三次：
+
+| 问题 | 为什么本地发现不了 |
+| --- | --- |
+| `ERR_PNPM_IGNORED_BUILDS` | `node_modules` 已存在，install 从不重跑安装脚本 |
+| 顶栏 logo 404 | dev 有服务端，`/_next/image` 优化接口真实存在 |
+| `Cannot find name 'PageProps'` | 跑过 dev/build，生成的类型还留在工作区 |
+
+产物断言覆盖：基础产物存在、sitemap 非空、文章页与标签页为目录形式且
+真的产出 `index.html`、无 `/_next/image` 引用、`public/` 资源已复制。
 
 ### Cloudflare Pages 后台配置
 
