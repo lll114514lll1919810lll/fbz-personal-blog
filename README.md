@@ -91,8 +91,35 @@ export const metadata = {
 | 文章目录 | `table-of-contents.tsx` | 桌面端贴在正文右侧，滚动时高亮当前小节；移动端收进折叠按钮 |
 | 阅读进度条 | `reading-progress.tsx` | 顶部 1.5px 细线，用 `rAF` 节流避免滚动掉帧 |
 | 悬停微交互 | `post-card.tsx` | 列表项悬停时泛底色、横线延展、摘要和标签淡入 |
+| 正文宽度调节 | `post-body.tsx` | 文章页可切换窄/标准/宽三档，选择记在 localStorage |
 
 改配色只需动 `globals.css` 顶部的 CSS 变量，明暗两套值一一对应。
+
+### 正文宽度调节
+
+文章页头部有一条宽度控制条，三档循环切换：
+
+| 档位 | 正文宽度 | 每行约 |
+| --- | --- | --- |
+| 窄 | 36rem | 34 字 |
+| 标准 | 44rem | 42 字 |
+| 宽 | 52rem | 50 字 |
+
+用 rem 而不是 px，因为中文是全角字宽，px 宽度在不同字号下对应的字数会飘。
+档位存在 `localStorage` 的 `fbz-reading-width`，刷新和跨页都保持。
+
+实现上有两个坑值得注意：
+
+- **宽度状态只能在一个组件里维护**。切换按钮和正文容器如果各自调用
+  `useReadingWidth()`，那是两个互不相干的 state，点按钮正文不会变宽。
+- **正文容器要用 `w-full` 而不是 `flex-1`**。`flex-1` 会把元素撑满可用空间，
+  `maxWidth` 就形同虚设，三档会看起来一模一样。
+
+读取偏好用 `useSyncExternalStore` 而非 `useState + useEffect`：后者需要在挂载后
+同步 setState 读一次偏好，会多渲染一轮并触发 `react-hooks/set-state-in-effect` 警告。
+
+顶栏、底栏、正文三者的内容宽度上限统一由 `CONTENT_MAX_WIDTH`（`src/lib/site.ts`）
+控制，保证左右严格对齐。
 
 **目录锚点的一致性**：`rehype-slug` 用 `github-slugger` 生成标题 id，
 所以 `getTableOfContents()` 也用同一个库算 slug，锚点跳转才可靠。

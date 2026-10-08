@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PostBody } from "@/components/post-body";
 import { PostNavigation } from "@/components/post-navigation";
-import { TableOfContents } from "@/components/table-of-contents";
 import { getAllPosts, getPostBySlug, getTableOfContents } from "@/lib/posts";
 import { formatDate } from "@/lib/date";
 
@@ -52,79 +52,65 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
   const index = allPosts.findIndex((p) => p.slug === slug);
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* 移动端：目录收在折叠按钮里 */}
-      <div className="xl:hidden">
-        <TableOfContents variant="collapsible" items={toc} />
-      </div>
+    <PostBody
+      toc={toc}
+      header={
+        <header className="flex flex-col gap-4 pb-6">
+          <div className="-my-2 flex items-center gap-2.5 py-2 text-[13px] text-muted">
+            <Link
+              href="/blog"
+              className="inline-flex items-center py-2 transition-colors hover:text-secondary"
+            >
+              文章
+            </Link>
+            <span aria-hidden>/</span>
+            <span className="truncate">{post.tags?.[0] ?? "未分类"}</span>
+          </div>
 
-      <div className="flex flex-col gap-10 xl:flex-row xl:gap-12">
-        <article className="min-w-0 flex-1">
-          <header className="flex flex-col gap-4 pb-8">
-            <div className="-my-2 flex items-center gap-2.5 py-2 text-[13px] text-muted">
-              <Link
-                href="/blog"
-                className="inline-flex items-center py-2 transition-colors hover:text-secondary"
-              >
-                文章
-              </Link>
-              <span aria-hidden>/</span>
-              <span className="truncate">{post.tags?.[0] ?? "未分类"}</span>
-            </div>
+          <h1 className="text-3xl font-bold leading-tight tracking-tight">
+            {post.title}
+          </h1>
 
-            <h1 className="text-3xl font-bold leading-tight tracking-tight">
-              {post.title}
-            </h1>
+          {post.description && (
+            <p className="text-base leading-relaxed text-secondary">
+              {post.description}
+            </p>
+          )}
 
-            {post.description && (
-              <p className="text-base leading-relaxed text-secondary">
-                {post.description}
-              </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
+            <time dateTime={post.date} className="tabular-nums">
+              {formatDate(post.date)}
+            </time>
+            <span aria-hidden>·</span>
+            <span>{post.readingTime} 分钟读完</span>
+
+            {post.tags && post.tags.length > 0 && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="-my-1.5 flex flex-wrap gap-1.5 py-1.5">
+                  {post.tags.map((tag) => (
+                    <Link
+                      key={tag}
+                      href={`/tags/${encodeURIComponent(tag)}`}
+                      className="inline-flex items-center rounded border border-border px-2 py-2.5 text-[11px] leading-none transition-colors hover:border-accent hover:text-accent"
+                    >
+                      {tag}
+                    </Link>
+                  ))}
+                </span>
+              </>
             )}
-
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted">
-              <time dateTime={post.date} className="tabular-nums">
-                {formatDate(post.date)}
-              </time>
-              <span aria-hidden>·</span>
-              <span>{post.readingTime} 分钟读完</span>
-
-              {post.tags && post.tags.length > 0 && (
-                <>
-                  <span aria-hidden>·</span>
-                  <span className="-my-1.5 flex flex-wrap gap-1.5 py-1.5">
-                    {post.tags.map((tag) => (
-                      <Link
-                        key={tag}
-                        href={`/tags/${encodeURIComponent(tag)}`}
-                        className="inline-flex items-center rounded border border-border px-2 py-2.5 text-[11px] leading-none transition-colors hover:border-accent hover:text-accent"
-                      >
-                        {tag}
-                      </Link>
-                    ))}
-                  </span>
-                </>
-              )}
-            </div>
-          </header>
-
-          <div className="prose border-t border-border pt-8">
-            <Content />
           </div>
-
-          <div className="mt-12">
-            <PostNavigation
-              previous={allPosts[index + 1]}
-              next={allPosts[index - 1]}
-            />
-          </div>
-        </article>
-
-        {/* 桌面端：正文右侧的目录列。宽度给到 w-64，否则长标题会频繁折行。 */}
-        <div className="hidden w-64 shrink-0 xl:block">
-          <TableOfContents variant="sidebar" items={toc} />
-        </div>
-      </div>
-    </div>
+        </header>
+      }
+      footer={
+        <PostNavigation
+          previous={allPosts[index + 1]}
+          next={allPosts[index - 1]}
+        />
+      }
+    >
+      <Content />
+    </PostBody>
   );
 }

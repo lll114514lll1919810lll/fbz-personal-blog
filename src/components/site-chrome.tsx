@@ -1,11 +1,17 @@
 import Link from "next/link";
-import { navLinks, siteConfig } from "@/lib/site";
+import { CONTENT_MAX_WIDTH, navLinks, siteConfig } from "@/lib/site";
 
 export function SiteHeader() {
   return (
+    // 外层负责全宽：背景和下边框线一直延伸到屏幕两端
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
-        {/* 链接用 flex + py 撑出 44px 高的可点区域（触控热区标准），
+      {/* 内层限制内容宽度并居中。用较宽的上限，让站名和导航更靠近屏幕两侧，
+          避免在超宽屏上挤在中间一小块。 */}
+      <div
+        className="mx-auto flex h-14 items-center justify-between px-6"
+        style={{ maxWidth: CONTENT_MAX_WIDTH }}
+      >
+        {/* 链接用 py 撑出 44px 高的可点区域（触控热区标准），
             视觉上仍是小字，不影响排版密度 */}
         <Link
           href="/"
@@ -32,8 +38,11 @@ export function SiteHeader() {
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-border">
-      <div className="mx-auto flex max-w-5xl flex-col gap-1 px-6 py-10 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between">
+    <footer className="mt-auto w-full border-t border-border">
+      <div
+        className="mx-auto flex flex-col gap-1 px-6 py-10 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between"
+        style={{ maxWidth: CONTENT_MAX_WIDTH }}
+      >
         <p>
           © {new Date().getFullYear()} {siteConfig.author}
         </p>

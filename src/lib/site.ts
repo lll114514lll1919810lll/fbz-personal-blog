@@ -16,3 +16,12 @@ export const navLinks = [
   { href: "/tags", label: "标签" },
   { href: "/about", label: "关于" },
 ] as const;
+
+/**
+ * 顶栏、底栏、正文三者的内容宽度上限，保持左右对齐。
+ *
+ * 用 rem 而不是 Tailwind 的 max-w-* 类，因为正文宽度要能被用户调节
+ * （见 lib/reading-width.ts），两者需要用同一套单位换算。
+ * 数值偏大是有意的：内容更靠近屏幕两侧，超宽屏上不会挤成一小条。
+ */
+export const CONTENT_MAX_WIDTH = "112rem"; // 约 1792px
