@@ -45,15 +45,19 @@ export function PostBody({
 
   return (
     <div className="flex flex-col gap-10 sm:gap-12">
-      {/* 移动端：目录收在折叠按钮里 */}
-      <div className="xl:hidden">
+      {/* 窄屏：目录收在顶部的折叠按钮里。
+          1024px（lg）起改成右侧常驻侧栏——不是凭感觉挑的：正文最窄档
+          576px + 侧栏 256px + 间距 48px + 页面内边距 48px 正好 928px，
+          1024 再往上两栏都还放得下。原来卡在 1280（xl），1200 出头那种
+          窗口右侧明明空着一大块，目录却还挤在顶部占两行。 */}
+      <div className="toc-top-slot">
         <TableOfContents variant="collapsible" items={toc} />
       </div>
 
       {/* 正文宽度 = 正文栏 + 固定宽的目录侧栏。
           用 items-start + justify-center 让整块内容居中，
           调宽度时正文跟着变宽，两侧留白重新分配。 */}
-      <div className="flex flex-col gap-10 xl:flex-row xl:items-start xl:justify-center xl:gap-12">
+      <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-center lg:gap-12">
         {/* w-full 而不是 flex-1：让 maxWidth 真正生效。
             flex-1 会把元素撑满可用空间，maxWidth 就形同虚设。
 
@@ -100,7 +104,7 @@ export function PostBody({
           它的包裹层范围内生效——滚过那段高度目录就跟着消失了。
           拉伸到整行高度后，sticky 才有足够的行程。
         */}
-        <div className="hidden w-64 shrink-0 xl:block xl:self-stretch">
+        <div className="toc-sidebar-slot hidden w-64 shrink-0 lg:block lg:self-stretch">
           <TableOfContents variant="sidebar" items={toc} />
         </div>
       </div>

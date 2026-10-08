@@ -373,6 +373,49 @@
      手机上正文本来就只有一列宽，可调的余地很小，而这条控制线要占掉整整
      两行高度，压在正文前面不划算。 */
 
+  /* ==========================================================================
+     目录的两种形态：窄屏在顶部，1024px 起挪到正文右侧。
+
+     两个槽位都由断点决定显隐，切换本身是瞬时的（display 没法过渡），
+     所以给「到达」的一侧补一段入场动画：顶栏往下滑入、侧栏从右侧滑入。
+     动画不带 fill-mode，跑完就回到常态样式，不会留下 transform——
+     留着的话侧栏那层会变成 containing block，影响里面的 sticky。
+
+     prefers-reduced-motion 下全局规则会把时长压到 0.01ms，自动降级。
+     ========================================================================== */
+
+  .toc-top-slot {
+    animation: toc-top-in 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  @keyframes toc-top-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    /* 顶栏整块撤掉，连它那两行高度一起——留在布局里会多出一段 flex gap */
+    .toc-top-slot {
+      display: none;
+      animation: none;
+    }
+
+    /* 动画挂在 <nav> 自己身上而不是外层槽位：外层是 sticky 的行程容器，
+       transform 挂在它上面会让 sticky 的参照系变掉。 */
+    .toc-sidebar-slot > nav {
+      animation: toc-sidebar-in 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+  }
+
+  @keyframes toc-sidebar-in {
+    from {
+      opacity: 0;
+      transform: translateX(14px);
+    }
+  }
+
   .eyebrow {
     color: var(--eyebrow-color);
     font-size: 0.68rem;
