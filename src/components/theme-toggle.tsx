@@ -31,7 +31,16 @@ export function ThemeToggle() {
       aria-checked={isDark}
       aria-label="深色模式"
       title={isDark ? "切换到浅色模式" : "切换到深色模式"}
-      onClick={toggle}
+      onClick={(event) => {
+        /*
+          圆形扩散的圆心用点击位置；键盘触发时 clientX/Y 是 0，
+          那就退回用按钮自己的中心，键盘用户也能看到从开关长出来的动画。
+        */
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = event.clientX || rect.left + rect.width / 2;
+        const y = event.clientY || rect.top + rect.height / 2;
+        toggle({ x, y });
+      }}
       className="theme-switch"
     >
       <span className="theme-switch-track">

@@ -877,6 +877,10 @@ html {
 .prose .post-figure {
   margin-left: 0;
   margin-right: 0;
+  /* 配图窄于正文列时居中展示（不放大之后很多截图就是窄的），图注一起居中 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .prose .post-figure img {
@@ -1317,6 +1321,35 @@ html {
    不会残留最后一帧和新页面重叠。 */
 ::view-transition-old(page) {
   animation: page-fade-out 140ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+/* ----------------------------------------------------------------------------
+   主题切换：以开关为圆心扩散到整页
+
+   浏览器先把旧主题冻结成一张全屏快照，再按 clip-path 的圆把新主题揭开。
+   ::view-transition-old(root) 保持不动——它就是被「擦掉」的那一层；
+   圆心与半径由 JS 写到 html 的自定义属性上（见 lib/use-theme.ts）。
+   prefers-reduced-motion 下全局规则会把动画时长归零，直接切换。
+   ---------------------------------------------------------------------------- */
+
+::view-transition-old(root) {
+  animation: none;
+}
+
+::view-transition-new(root) {
+  /* 曲线不能用 (0.22,0.61,0.36,1) 那种前段极陡的 ease-out：
+     实测 180ms 半径就到了 1293px（满值 1636px），看起来几乎是瞬间铺满，
+     完全没有「从按钮长出来」的过程。这里用标准缓动，让半径均匀推进。 */
+  animation: theme-reveal 520ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0px at var(--theme-x) var(--theme-y));
+  }
+  to {
+    clip-path: circle(var(--theme-r) at var(--theme-x) var(--theme-y));
+  }
 }
 
 /* 链接点击反馈：等待导航完成期间压暗，给出即时的「收到了」信号。
