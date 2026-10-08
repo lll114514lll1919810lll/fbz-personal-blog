@@ -9,8 +9,10 @@ export const metadata = {
 ## 语法高亮
 
 代码块用 Shiki 在构建期高亮，语法树来自 TextMate 语法定义，和 VS Code 同一套引擎。
-支持 ts、tsx、js、jsx、json、bash、css、html、md、mdx、python、rust 等常用语言，
-不写语言标记时会尝试自动识别。
+支持 ts、tsx、js、jsx、json、bash、css、html、md、mdx、python、rust 等常用语言。
+
+注意：**语言标记得自己写，Shiki 不会猜。** 不写就按纯文本处理，一点颜色都没有，
+详见下面的「不写语言会怎样」。
 
 ## 明暗双主题
 
