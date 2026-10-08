@@ -6,6 +6,21 @@ import { scrollIntoViewIfNeeded, scrollToAnchor } from "@/lib/scroll";
 import { useActiveHeading } from "./use-active-heading";
 
 /**
+ * 子项列表展开/收起的高度过渡时长，必须与 .toc-sublist 上的
+ * duration-250 保持一致（见 globals.css）。
+ */
+const TOC_TOGGLE_MS = 250;
+
+/**
+ * 切换章节后，旧章节延迟多久才开始收起。
+ *
+ * 留出比展开动画稍长一点的时间，让新章节先长开、旧章节再收回，
+ * 两段动画不重叠。同时做，侧栏内容会在同一时间既收缩又增长，
+ * 后面的条目被推来推去，看起来在抖。
+ */
+const COLLAPSE_DELAY_MS = TOC_TOGGLE_MS + 40;
+
+/**
  * 文章目录的两种形态：
  * - sidebar：桌面端，贴在正文右侧，滚动时高亮当前小节
  * - collapsible：移动端，收进一个可折叠按钮里，侧栏在窄屏没有空间
@@ -95,11 +110,17 @@ function Sidebar({ items }: { items: TocItem[] }) {
   const navRef = useRef<HTMLElement>(null);
 
   /**
-   * 切换章节时清掉手动展开项。
+   * 正在等待收起的旧章节。
    *
-   * 这是「之前章节自动收起，无视用户是否手动展开过」的实现：
-   * 读者翻到新章节后，上一章展开的子项不再需要，留着只会占地方、
-   * 让人分不清哪些是当前章节的内容。
+   * 切换章节时不能立刻把旧章节折起来：新的正在长开、旧的正在收回，
+   * 两段动画同时跑，侧栏里后面的条目会被同时推上和拉下，看起来很抖。
+   * 这里让旧章节多停留一会儿（closingId 期间仍算展开），
+   * 等新章节的展开动画跑完再真正收起。
+   */
+  const [closingId, setClosingId] = useState<string | null>(null);
+
+  /**
+   * 切换章节时：清掉手动展开项，并把上一章标为「待收起」。
    *
    * 用渲染期比较而不是 useEffect：effect 里同步 setState 会多渲染一轮，
    * 也触发 react-hooks/set-state-in-effect。这也是 React 官方推荐的
@@ -107,9 +128,31 @@ function Sidebar({ items }: { items: TocItem[] }) {
    */
   const [prevActiveGroup, setPrevActiveGroup] = useState<string | null>(null);
   if (activeGroupId !== prevActiveGroup) {
+    const previous = prevActiveGroup;
+
     setPrevActiveGroup(activeGroupId);
+    // 「之前章节自动收起，无视用户是否手动展开过」
     setManualId(null);
+
+    // 上一章如果当时是展开的，先标记为待收起，交给下面的定时器延后处理
+    if (
+      previous !== null &&
+      previous !== activeGroupId &&
+      previous !== manualId
+    ) {
+      setClosingId(previous);
+    }
   }
+
+  /**
+   * 延迟收起旧章节。定时器回调里 setState 属于异步，不会触发
+   * react-hooks/set-state-in-effect。
+   */
+  useEffect(() => {
+    if (closingId === null) return;
+    const timer = setTimeout(() => setClosingId(null), COLLAPSE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [closingId]);
 
   // 展开的分组也跟着高亮项走：展开后如果条目在侧栏可视区外，
   // 读者看不到自己刚展开了什么
@@ -138,14 +181,22 @@ function Sidebar({ items }: { items: TocItem[] }) {
     window.history.replaceState(null, "", `#${encodeURIComponent(id)}`);
   };
 
-  /** 展开状态：当前章节强制展开，其余看手动项 */
+  /**
+   * 展开状态：当前章节强制展开，待收起的旧章节暂时保持展开，
+   * 其余看手动项。
+   */
   const isOpen = (node: TocNode) =>
-    node.id === activeGroupId || node.id === manualId;
+    node.id === activeGroupId ||
+    node.id === manualId ||
+    node.id === closingId;
 
   /** 当前章节的按钮置灰不可点：收起它也只会被强制展开，徒增困惑 */
   const isLocked = (node: TocNode) => node.id === activeGroupId;
 
   const toggle = (id: string) => {
+    // 用户主动操作这个分组时，取消它的待收起状态，
+    // 否则定时器到点会把它收掉，和用户的意图相反
+    if (closingId === id) setClosingId(null);
     setManualId((prev) => (prev === id ? null : id));
   };
 
@@ -331,14 +382,32 @@ function Collapsible({ items }: { items: TocItem[] }) {
   );
   const activeGroupId = activeNode?.id ?? null;
 
-  // 与桌面端同一套规则：章节变了就清掉手动展开项（上一章自动收起）
+  // 与桌面端同一套规则：章节变了就清掉手动展开项，
+  // 并把旧章节标为待收起（延后到新章节展开动画结束再收）
+  const [closingId, setClosingId] = useState<string | null>(null);
   const [prevActiveGroup, setPrevActiveGroup] = useState<string | null>(null);
   if (activeGroupId !== prevActiveGroup) {
+    const previous = prevActiveGroup;
     setPrevActiveGroup(activeGroupId);
     setManualId(null);
+
+    if (
+      previous !== null &&
+      previous !== activeGroupId &&
+      previous !== manualId
+    ) {
+      setClosingId(previous);
+    }
   }
 
+  useEffect(() => {
+    if (closingId === null) return;
+    const timer = setTimeout(() => setClosingId(null), COLLAPSE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [closingId]);
+
   const toggleGroup = (id: string) => {
+    if (closingId === id) setClosingId(null);
     setManualId((prev) => (prev === id ? null : id));
   };
 
@@ -384,7 +453,10 @@ function Collapsible({ items }: { items: TocItem[] }) {
               {tree.map((node) => {
             const hasChildren = node.children.length > 0;
             const locked = node.id === activeGroupId;
-            const groupOpen = node.id === activeGroupId || node.id === manualId;
+            const groupOpen =
+              node.id === activeGroupId ||
+              node.id === manualId ||
+              node.id === closingId;
 
             return (
               <li key={node.id || node.text}>
