@@ -10,6 +10,11 @@ function getCoverTheme(slug: string) {
   return coverThemes[score % coverThemes.length];
 }
 
+function getPostNumber(slug: string): string {
+  const match = /^(\d+)(?:-|$)/.exec(slug);
+  return match ? match[1].padStart(2, "0") : "00";
+}
+
 /**
  * 文章列表里的一项。
  *
@@ -61,7 +66,7 @@ export function PostCard({
           <span className="cover-orbit cover-orbit-one" aria-hidden="true" />
           <span className="cover-orbit cover-orbit-two" aria-hidden="true" />
           <span className="cover-label">风不止 / NOTES</span>
-          <span className="cover-index">0{(post.slug.length % 9) + 1}</span>
+          <span className="cover-index">{getPostNumber(post.slug)}</span>
         </div>
 
         <div className={`flex flex-col gap-3 px-5 py-5 ${featured ? "md:justify-center md:px-8 md:py-8" : ""}`}>

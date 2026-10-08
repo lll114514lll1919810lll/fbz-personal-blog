@@ -17,6 +17,7 @@ const POSTS_DIR = path.join(process.cwd(), "src/content");
 export type PostMetadata = {
   title: string;
   date: string; // YYYY-MM-DD
+  publishedAt?: string; // ISO 8601，精确到发布时间，用于同日排序
   description?: string;
   tags?: string[];
   draft?: boolean;
@@ -49,7 +50,12 @@ export function getAllPosts(): Post[] {
 
   return posts
     .filter((post) => !post.draft)
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort((a, b) => {
+      const byPublishedAt = (b.publishedAt ?? b.date).localeCompare(
+        a.publishedAt ?? a.date,
+      );
+      return byPublishedAt || a.slug.localeCompare(b.slug);
+    });
 }
 
 /** 根据 slug 取单篇文章的元信息；找不到返回 null。 */
@@ -182,6 +188,7 @@ function parseMetadata(source: string): PostMetadata {
     return {
       title: value.title ?? "未命名文章",
       date: value.date ?? "1970-01-01",
+      publishedAt: value.publishedAt,
       description: value.description,
       tags: value.tags,
       draft: value.draft,

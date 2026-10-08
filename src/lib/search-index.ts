@@ -25,6 +25,7 @@ export type SearchDoc = {
   slug: string;
   title: string;
   date: string;
+  publishedAt?: string;
   description: string;
   tags: string[];
   readingTime: number;
@@ -143,6 +144,7 @@ export function buildSearchIndex(): SearchIndex {
       slug: post.slug,
       title: post.title,
       date: post.date,
+      publishedAt: post.publishedAt,
       description: post.description ?? "",
       tags: post.tags ?? [],
       readingTime: post.readingTime ?? 0,

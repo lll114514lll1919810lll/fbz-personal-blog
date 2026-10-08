@@ -107,7 +107,14 @@ function search(index: SearchIndex, query: string, limit = 12): Hit[] {
   }
 
   return [...best.values()]
-    .sort((a, b) => b.score - a.score || (a.doc.date < b.doc.date ? 1 : -1))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (b.doc.publishedAt ?? b.doc.date).localeCompare(
+          a.doc.publishedAt ?? a.doc.date,
+        ) ||
+        a.doc.slug.localeCompare(b.doc.slug),
+    )
     .slice(0, limit);
 }
 
