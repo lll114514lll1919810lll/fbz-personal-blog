@@ -61,10 +61,10 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
       <div className="flex flex-col gap-10 xl:flex-row xl:gap-12">
         <article className="min-w-0 flex-1">
           <header className="flex flex-col gap-4 pb-8">
-            <div className="flex items-center gap-2.5 text-[13px] text-muted">
+            <div className="-my-2 flex items-center gap-2.5 py-2 text-[13px] text-muted">
               <Link
                 href="/blog"
-                className="transition-colors hover:text-secondary"
+                className="inline-flex items-center py-2 transition-colors hover:text-secondary"
               >
                 文章
               </Link>
@@ -92,12 +92,12 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
               {post.tags && post.tags.length > 0 && (
                 <>
                   <span aria-hidden>·</span>
-                  <span className="flex flex-wrap gap-1.5">
+                  <span className="-my-1.5 flex flex-wrap gap-1.5 py-1.5">
                     {post.tags.map((tag) => (
                       <Link
                         key={tag}
                         href={`/tags/${encodeURIComponent(tag)}`}
-                        className="rounded border border-border px-1.5 py-0.5 text-[11px] leading-none transition-colors hover:border-accent hover:text-accent"
+                        className="inline-flex items-center rounded border border-border px-2 py-2.5 text-[11px] leading-none transition-colors hover:border-accent hover:text-accent"
                       >
                         {tag}
                       </Link>

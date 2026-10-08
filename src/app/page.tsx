@@ -22,7 +22,7 @@ export default function HomePage() {
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-2 text-sm">
           <Link
             href="/blog"
-            className="font-medium text-accent transition-opacity hover:opacity-70"
+            className="-my-2 flex items-center py-2 font-medium text-accent transition-opacity hover:opacity-70"
           >
             开始阅读 →
           </Link>

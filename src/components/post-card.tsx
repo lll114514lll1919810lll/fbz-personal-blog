@@ -43,7 +43,7 @@ export function PostCard({ post }: { post: Post }) {
               {post.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded border border-border px-1.5 py-0.5 text-[11px] leading-none text-muted opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                  className="inline-flex items-center rounded border border-border px-1.5 py-1 text-[11px] leading-none text-muted opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                 >
                   {tag}
                 </span>
@@ -52,11 +52,13 @@ export function PostCard({ post }: { post: Post }) {
           )}
         </div>
 
-        <h2 className="relative text-lg font-semibold leading-snug tracking-tight">
-          {/* 标题前的短横线：悬停时延展 */}
+        {/* 用 pl-9 给标题留出左侧空间，横线就长在这块空间里。
+            不加 padding 的话，横线延展会越过边界压到文字上。 */}
+        <h2 className="relative pl-9 text-lg font-semibold leading-snug tracking-tight">
+          {/* 标题前的短横线：悬停时延展，始终停在文字左侧 */}
           <span
             aria-hidden
-            className="absolute -left-4 top-1/2 h-px w-3 -translate-y-1/2 bg-accent transition-all duration-200 group-hover:w-6 sm:-left-6 sm:group-hover:w-8"
+            className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 bg-accent transition-all duration-200 group-hover:w-6"
           />
           <span className="transition-colors group-hover:text-accent">
             {post.title}
