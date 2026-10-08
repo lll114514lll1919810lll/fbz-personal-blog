@@ -564,8 +564,50 @@ Cloudflare 后台 → Pages 项目 → 设置 → 变量与机密，添加两个
 
 | 变量名 | 说明 |
 | --- | --- |
-| `ADMIN_KEY` | 管理员删除留言用的密钥，自己随便设一串长的 |
+| `ADMIN_KEY` | 管理员登录密钥。**至少 16 位**，短于 16 位会被拒绝登录 |
 | `IP_SALT` | 给 IP 哈希加的盐，随便设一串长的 |
+
+可选的第三个：
+
+| 变量名 | 说明 |
+| --- | --- |
+| `SESSION_SECRET` | 单独给登录 Cookie 签名用。不配就复用 `ADMIN_KEY` |
+
+### 管理后台
+
+| 地址 | 用途 |
+| --- | --- |
+| `/adminlogin` | 登录页 |
+| `/admin` | 留言管理（列表、搜索、删除） |
+
+**两个页面都没有任何入口链接**——导航栏、页脚、sitemap 里都不放，
+只能靠记住地址访问。同时做了两道「别被收录」的防护：
+`robots.txt` 里 `Disallow: /admin`、`/adminlogin`，页面本身带 `noindex`。
+前者只约束守规矩的爬虫，后者才是真正的信号。
+
+管理页是静态导出的 HTML，**任何人都能打开这个地址**——
+真正的门在 `/api/admin/*` 上：未登录时接口一律返回 401，
+页面拿不到数据并跳回登录页。所以这里不需要也没法做服务端鉴权。
+
+功能：按昵称/内容/文章标识搜索（300ms 防抖）、分页、两步确认删除、
+退出登录。
+
+### 登录态的实现
+
+用 **HMAC 签名的 HttpOnly Cookie**，服务端不存任何会话记录：
+
+- Cookie 内容只有过期时间和签名（`<过期时间戳>.<HMAC-SHA256>`），
+  验签即可，无需查库；水平扩容也没有一致性问题
+- **HttpOnly**：JavaScript 读不到，XSS 偷不走
+  （这也是不用 localStorage 存 token 的原因）
+- **SameSite=Strict**：跨站请求不带它，顺带挡掉 CSRF
+- **Secure 只在 https 下加**：本地 `wrangler pages dev` 跑在 http://127.0.0.1，
+  带上 Secure 浏览器会直接丢弃 Cookie，表现为「登录成功却仍是未登录」
+- 有效期 7 天
+
+其他防护：密钥比较用常量时间；登录失败固定延迟 400ms 抬高暴力破解成本；
+`ADMIN_KEY` 短于 16 位直接拒绝登录；管理接口响应一律 `no-store`，
+避免未登录者命中有权限的缓存响应。
 
 **4. 推送**
 
@@ -595,8 +637,13 @@ ADMIN_KEY=local-dev-admin-key
 IP_SALT=local-dev-salt
 ```
 
-### 删除一条留言
+### 用命令行删一条留言
+
+不想开后台时可以直接调接口（需要 `ADMIN_KEY`）：
 
 ```bash
 curl -X DELETE "https://blog.mclll114.me/api/comments?id=<id>&key=<ADMIN_KEY>"
 ```
+
+> 本地管理后台：<http://127.0.0.1:8788/adminlogin>。
+> `.dev.vars` 里的 `ADMIN_KEY` 同样受「至少 16 位」约束，否则登录会被拒。

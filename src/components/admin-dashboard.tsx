@@ -1,0 +1,281 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { absoluteTime, relativeTime } from "@/lib/time";
+
+/**
+ * 评论管理后台。
+ *
+ * 鉴权完全在后端：这里能拿到的数据都来自 /api/admin/*，
+ * 未登录时接口返回 401，页面据此跳回登录页。也就是说即使有人
+ * 直接打开 /admin，看到的也只是一个空壳——真正的门在接口上。
+ */
+
+type AdminComment = {
+  id: number;
+  page: string;
+  name: string;
+  text: string;
+  created_at: string;
+};
+
+type Payload = {
+  total: number;
+  limit: number;
+  offset: number;
+  items: AdminComment[];
+};
+
+const PAGE_SIZE = 20;
+
+export function AdminDashboard() {
+  const router = useRouter();
+
+  const [items, setItems] = useState<AdminComment[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  /** 正在等待二次确认删除的那条 id（避免用 window.confirm 的阻塞弹窗） */
+  const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // 搜索防抖：每敲一个字就请求一次太浪费，等停手 300ms 再查
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(searchInput.trim());
+      setOffset(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          limit: String(PAGE_SIZE),
+          offset: String(offset),
+        });
+        if (query) params.set("q", query);
+
+        const res = await fetch(`/api/admin/comments?${params}`, {
+          headers: { accept: "application/json" },
+          signal: controller.signal,
+        });
+
+        // 未登录（或会话过期）→ 回登录页。
+        // replace 而不是 push：别让「后退」回到一个必然跳转的页面。
+        if (res.status === 401) {
+          router.replace("/adminlogin");
+          return;
+        }
+
+        const body = await res.json().catch(() => null);
+        if (controller.signal.aborted) return;
+
+        if (!res.ok) {
+          setError(body?.error || "加载失败");
+          setLoading(false);
+          return;
+        }
+
+        const payload = body as Payload;
+        setItems(Array.isArray(payload?.items) ? payload.items : []);
+        setTotal(payload?.total ?? 0);
+        setError("");
+        setLoading(false);
+      } catch {
+        if (controller.signal.aborted) return;
+        setError("网络异常，请重试");
+        setLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [offset, query, reloadKey, router]);
+
+  async function remove(id: number) {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/comments?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.status === 401) {
+        router.replace("/adminlogin");
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.error || "删除失败");
+        return;
+      }
+
+      setPendingDelete(null);
+      // 删掉当前页最后一条时往前退一页，否则会停在一个空白页
+      if (items.length === 1 && offset > 0) setOffset((o) => Math.max(0, o - PAGE_SIZE));
+      else setReloadKey((k) => k + 1);
+    } catch {
+      setError("网络异常，删除失败");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function logout() {
+    await fetch("/api/admin/session", { method: "DELETE" }).catch(() => {});
+    router.replace("/adminlogin");
+  }
+
+  const hasPrev = offset > 0;
+  const hasNext = offset + PAGE_SIZE < total;
+
+  return (
+    <div className="flex flex-col gap-8">
+      <header className="panel panel-strong flex flex-col gap-4 px-7 py-8 sm:px-10 sm:py-9">
+        <p className="eyebrow">ADMIN</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              评论管理
+            </h1>
+            <p className="mt-2 text-sm text-secondary">
+              {loading ? "加载中…" : `共 ${total} 条${query ? "（已筛选）" : ""}`}
+            </p>
+          </div>
+          <button type="button" onClick={logout} className="btn-pill">
+            退出登录
+          </button>
+        </div>
+      </header>
+
+      <section className="panel flex flex-col gap-3 px-5 py-5 sm:px-6">
+        <label className="sr-only" htmlFor="admin-search">
+          搜索留言
+        </label>
+        <input
+          id="admin-search"
+          type="search"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="搜索昵称、内容或文章标识…"
+          className="field-input"
+        />
+      </section>
+
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          {error}
+        </p>
+      )}
+
+      {!loading && items.length === 0 && !error && (
+        <p className="text-sm text-muted">
+          {query ? "没有匹配的留言。" : "还没有任何留言。"}
+        </p>
+      )}
+
+      {items.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {items.map((c) => (
+            <li
+              key={c.id}
+              className="panel rounded-[var(--radius-panel)] px-5 py-4"
+            >
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-sm font-medium">{c.name}</span>
+                <time
+                  dateTime={c.created_at}
+                  title={absoluteTime(c.created_at)}
+                  className="text-xs text-muted"
+                >
+                  {relativeTime(c.created_at)}
+                </time>
+                {/* 后台需要跨文章视角，所以要显示每条属于哪篇文章 */}
+                <Link
+                  href={`/blog/${c.page}`}
+                  className="text-xs text-muted underline-offset-2 hover:text-accent hover:underline"
+                >
+                  /blog/{c.page}
+                </Link>
+                <span className="ml-auto text-xs text-muted tabular-nums">
+                  #{c.id}
+                </span>
+              </div>
+
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-secondary">
+                {c.text}
+              </p>
+
+              <div className="mt-3 flex items-center justify-end gap-2">
+                {pendingDelete === c.id ? (
+                  <>
+                    <span className="text-xs text-muted">确定删除？</span>
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={() => remove(c.id)}
+                      className="btn-pill text-red-600 dark:text-red-400"
+                    >
+                      {deleting ? "删除中…" : "确认删除"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete(null)}
+                      className="btn-pill"
+                    >
+                      取消
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(c.id)}
+                    className="btn-pill"
+                  >
+                    删除
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {(hasPrev || hasNext) && (
+        <nav
+          aria-label="分页"
+          className="flex items-center justify-between gap-3"
+        >
+          <button
+            type="button"
+            disabled={!hasPrev}
+            onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+            className="btn-pill"
+          >
+            ← 上一页
+          </button>
+          <span className="text-xs text-muted tabular-nums">
+            {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} / {total}
+          </span>
+          <button
+            type="button"
+            disabled={!hasNext}
+            onClick={() => setOffset((o) => o + PAGE_SIZE)}
+            className="btn-pill"
+          >
+            下一页 →
+          </button>
+        </nav>
+      )}
+    </div>
+  );
+}

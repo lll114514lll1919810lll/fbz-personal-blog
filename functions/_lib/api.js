@@ -42,14 +42,28 @@ function corsHeaders(origin) {
  * x-content-type-options: nosniff 不能省——评论内容是用户输入，
  * 万一有代理/浏览器做内容嗅探，JSON 被当成 HTML 执行就是存储型 XSS。
  */
-export function json(data, status = 200, origin = "") {
+export function json(data, status = 200, origin = "", extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "x-content-type-options": "nosniff",
       ...corsHeaders(origin),
+      ...extraHeaders,
     },
+  });
+}
+
+/**
+ * 管理接口专用：额外带上 no-store，并允许附带 Set-Cookie。
+ *
+ * 管理接口的响应绝不能进任何缓存——否则未登录者可能拿到别人登录后的
+ * 列表，或者退出登录后仍命中缓存的已授权响应。
+ */
+export function adminJson(data, status = 200, extraHeaders = {}) {
+  return json(data, status, "", {
+    "cache-control": "no-store",
+    ...extraHeaders,
   });
 }
 
@@ -175,6 +189,119 @@ export function adminAuthorized(url, request, env) {
     diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
   }
   return diff === 0;
+}
+
+/* ------------------------------------------------------------- 会话 --- */
+
+/**
+ * 管理员登录态用「签名 Cookie」实现，服务端不存任何会话记录。
+ *
+ * 为什么不用数据库存 session：多一张表、多一次查询，而退出登录还得删记录；
+ * 签名方案是无状态的——Cookie 里只有过期时间和 HMAC 签名，
+ * 服务端验签即可，水平扩容也没有一致性问题。
+ *
+ * 为什么用 HttpOnly Cookie 而不是 localStorage 放 token：
+ * localStorage 里的 token 能被任何 XSS 脚本读走；HttpOnly Cookie 读不到。
+ * 再配 SameSite=Strict，跨站请求也不会带上它（顺带挡掉 CSRF）。
+ */
+
+export const SESSION_COOKIE = "fbz_admin";
+/** 登录有效期（秒）：7 天。个人博客的管理后台，够用且不至于长期有效 */
+export const SESSION_TTL = 7 * 24 * 60 * 60;
+/** 用于登录校验的密钥至少这么长，太短等于没设 */
+export const MIN_KEY_LENGTH = 16;
+
+function sessionSecret(env) {
+  // 优先用独立的 SESSION_SECRET；没配就退回 ADMIN_KEY。
+  // 两者任一存在即可工作，降低部署门槛。
+  return String((env && (env.SESSION_SECRET || env.ADMIN_KEY)) || "");
+}
+
+/** 常量时间字符串比较，避免时序侧信道 */
+export function timingSafeEqual(a, b) {
+  const x = String(a);
+  const y = String(b);
+  // 长度不同直接返回，但先走一遍等长累加，避免长度差异被计时区分
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return diff === 0;
+}
+
+function b64url(bytes) {
+  let s = "";
+  for (const b of new Uint8Array(bytes)) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function hmacSign(secret, message) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+}
+
+/** 签发登录令牌，格式 `<过期时间戳>.<HMAC>`；未配置密钥时返回 null */
+export async function issueSession(env, ttl = SESSION_TTL) {
+  const secret = sessionSecret(env);
+  if (!secret) return null;
+  const expires = Math.floor(Date.now() / 1000) + ttl;
+  const sig = b64url(await hmacSign(secret, String(expires)));
+  return `${expires}.${sig}`;
+}
+
+/** 校验登录令牌：先看是否过期，再重算签名做常量时间比较 */
+export async function verifySession(env, token) {
+  const secret = sessionSecret(env);
+  if (!secret || !token) return false;
+
+  const [expiresRaw, sig] = String(token).split(".");
+  const expires = Number(expiresRaw);
+  if (!Number.isInteger(expires)) return false;
+  if (expires <= Math.floor(Date.now() / 1000)) return false;
+
+  const expected = b64url(await hmacSign(secret, String(expires)));
+  return timingSafeEqual(sig || "", expected);
+}
+
+/** 从 Cookie 头里取某个键的值 */
+export function readCookie(request, name) {
+  const raw = request.headers.get("Cookie") || "";
+  for (const part of raw.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === name) return part.slice(idx + 1).trim();
+  }
+  return "";
+}
+
+/**
+ * 生成 Set-Cookie 值。
+ *
+ * Secure 只在 https 下加：本地 wrangler pages dev 跑在 http://127.0.0.1，
+ * 带上 Secure 浏览器会直接丢弃这个 Cookie，表现为「登录成功但仍是未登录」，
+ * 很难排查。
+ */
+function cookieAttr(url, maxAge) {
+  const secure = url.protocol === "https:" ? "; Secure" : "";
+  return `HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure}`;
+}
+
+export function sessionSetCookie(url, token) {
+  return `${SESSION_COOKIE}=${token}; ${cookieAttr(url, SESSION_TTL)}`;
+}
+
+export function sessionClearCookie(url) {
+  return `${SESSION_COOKIE}=; ${cookieAttr(url, 0)}`;
+}
+
+/** 当前请求是否已登录 */
+export async function hasSession(request, env) {
+  return verifySession(env, readCookie(request, SESSION_COOKIE));
 }
 
 /* -------------------------------------------------------------- 入口 --- */

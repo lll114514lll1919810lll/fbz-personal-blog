@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { relativeTime } from "@/lib/time";
 
 /**
  * 文章底部的评论區。
@@ -27,25 +28,6 @@ type Status = "loading" | "ready" | "unavailable" | "error";
 
 const MAX_TEXT = 500;
 const MAX_NAME = 24;
-
-/** 把 ISO 时间转成「刚刚 / N 分钟前 / N 小时前 / 具体日期」 */
-function relativeTime(iso: string): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return "";
-
-  const diffMin = Math.floor((Date.now() - t) / 60000);
-  if (diffMin < 1) return "刚刚";
-  if (diffMin < 60) return `${diffMin} 分钟前`;
-
-  const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour} 小时前`;
-
-  const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 30) return `${diffDay} 天前`;
-
-  const d = new Date(t);
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-}
 
 export function Comments({ page }: { page: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
@@ -202,7 +184,7 @@ export function Comments({ page }: { page: string }) {
             onChange={(e) => setName(e.target.value)}
             placeholder="昵称（可留空，默认「路人」）"
             autoComplete="nickname"
-            className="comment-input"
+            className="field-input"
           />
 
           <label className="sr-only" htmlFor="comment-text">
@@ -216,7 +198,7 @@ export function Comments({ page }: { page: string }) {
             maxLength={MAX_TEXT}
             onChange={(e) => setText(e.target.value)}
             placeholder="说点什么…"
-            className="comment-input resize-y"
+            className="field-input resize-y"
           />
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -231,7 +213,7 @@ export function Comments({ page }: { page: string }) {
               <button
                 type="submit"
                 disabled={submitting}
-                className="comment-submit"
+                className="btn-pill"
               >
                 {submitting ? "发送中…" : "发表"}
               </button>
@@ -274,7 +256,7 @@ export function Comments({ page }: { page: string }) {
           <button
             type="button"
             onClick={() => setReloadKey((k) => k + 1)}
-            className="comment-submit mt-3"
+            className="btn-pill mt-3"
           >
             重试
           </button>
