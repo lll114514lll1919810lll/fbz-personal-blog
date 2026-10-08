@@ -227,13 +227,46 @@ html {
 .code-block pre {
   /* 覆盖 .prose pre 的默认样式：这里需要为工具条留出顶部空间 */
   margin: 0;
-  padding: 2.6rem 1.25rem 1.15rem;
+  /* 底部 1.5rem 给横向滚动条留出空间，避免滚动条紧贴最后一行代码 */
+  padding: 2.6rem 1.25rem 1.5rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow-x: auto;
   line-height: 1.7;
   position: relative;
+
+  /* 细滚动条：Edge/Chrome 默认样式又粗又灰，和极简风格冲突。
+     ::-webkit-scrollbar 管 Chromium 系，scrollbar-* 管 Firefox。 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.code-block pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.code-block pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 滑块：默认低调，悬停代码块时才显出颜色，避免视觉噪音 */
+.code-block pre::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.15s ease;
+}
+
+.code-block pre:hover::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  background-clip: content-box;
+}
+
+.code-block pre::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary);
+  background-clip: content-box;
 }
 
 .code-block pre:focus-visible {
@@ -308,19 +341,21 @@ html {
   color: var(--accent);
 }
 
-/* 右侧渐变：代码横向溢出时提示还有内容 */
+/* 右侧渐变：代码横向溢出时提示还有内容。
+   底边留出滚动条高度（8px + 一点余量），否则渐变会被滚动条压住看不见。 */
 .code-block-fade {
   position: absolute;
   top: 1px;
   right: 1px;
-  bottom: 1px;
-  width: 2.5rem;
+  bottom: 11px;
+  width: 2.75rem;
+  z-index: 1;
   pointer-events: none;
   border-radius: 0 9px 9px 0;
   background: linear-gradient(
     to right,
     transparent,
-    var(--surface) 78%
+    var(--surface) 76%
   );
 }
 
