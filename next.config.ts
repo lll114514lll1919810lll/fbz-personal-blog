@@ -58,6 +58,22 @@ const nextConfig: NextConfig = {
          * 代价是每个页面多一次目录级请求，对博客这种页面量级可以忽略。
          */
         trailingSlash: true,
+
+        /*
+         * 关掉 next/image 的图片优化器。
+         *
+         * 这是静态导出的硬性要求：next/image 默认会把 src 改写成
+         *   /_next/image/?url=...&w=64&q=75
+         * 指向 Next 的优化接口，而那个接口是服务端路由，静态产物里不存在，
+         * 结果是图片静默 404——顶栏 logo 就是这么丢的。开启 unoptimized 后
+         * next/image 直接输出原图路径（/site-logo.jpg），保留 width/height
+         * 防抖动的能力，只是不再做缩放转码。
+         *
+         * 注意：只有导出模式才关。也就是说 `pnpm dev` 走优化器、
+         * 线上走原图，两者渲染结果不同——这类「本地好好的、线上才坏」的
+         * 问题不会在开发时暴露，改图片相关代码后务必跑一次导出构建验证。
+         */
+        images: { unoptimized: true },
       }
     : {}),
 };
