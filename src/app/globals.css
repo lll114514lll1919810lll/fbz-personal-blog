@@ -861,7 +861,110 @@ html {
 
 .prose .post-figure img {
   display: block;
-  width: 100%;
+  /* 不放大低分辨率配图：width:auto 让图片按原始像素宽度渲染，
+     max-width 只在「图比正文列还宽」时才缩放。
+     原来写的 width:100% 会把 896px 宽的截图拉到 1088px（宽档正文列），
+     等于用浏览器把图放大 1.2 倍，看起来发虚。 */
+  width: auto;
+  height: auto;
+  max-width: 100%;
+}
+
+/* 可点击放大的图片：cursor 由 JS 加了 data-zoomable 之后才生效，
+   避免脚本没跑时出现「看着能点却没反应」的假象 */
+.prose img[data-zoomable="on"] {
+  cursor: zoom-in;
+}
+
+.prose img[data-zoomable="on"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ----------------------------------------------------------------------------
+   配图放大预览
+
+   用原生 <dialog> + showModal()：它进的是浏览器 top layer，
+   不受正文面板 backdrop-filter 造成的 fixed 包含块影响，也白拿
+   Esc 关闭、焦点陷阱和背景 inert。
+   ---------------------------------------------------------------------------- */
+
+.image-lightbox {
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  color: var(--foreground);
+}
+
+.image-lightbox::backdrop {
+  background: rgb(0 0 0 / 0.84);
+  backdrop-filter: blur(6px);
+}
+
+/* 简短淡入。@starting-style 不被支持时就是直接出现，不影响可用性 */
+.image-lightbox[open] {
+  animation: lightbox-in 180ms ease-out;
+}
+
+@keyframes lightbox-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.image-lightbox-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.image-lightbox img {
+  display: block;
+  /* 同样不放大：小图按原尺寸显示，大图缩到视口内。
+     上限 1600px 是免得 4K 屏上把截图铺满整屏、看图反而费劲 */
+  width: auto;
+  height: auto;
+  max-width: min(94vw, 1600px);
+  max-height: 86vh;
+  border-radius: var(--radius-panel);
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.75);
+}
+
+.image-lightbox-caption {
+  max-width: min(94vw, 60rem);
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: rgb(255 255 255 / 0.72);
+  text-align: center;
+}
+
+.image-lightbox-close {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.12);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  color: rgb(255 255 255 / 0.9);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.image-lightbox-close:hover {
+  background: rgb(255 255 255 / 0.22);
+  color: #fff;
 }
 
 .prose .post-figure figcaption {

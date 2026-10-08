@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { ArticleImages } from "@/components/article-images";
 import { BackToTop } from "@/components/back-to-top";
 import { TableOfContents } from "@/components/table-of-contents";
 import { READING_WIDTHS, useReadingWidth } from "@/lib/reading-width";
@@ -68,7 +69,13 @@ export function PostBody({
             />
           </div>
 
-          <div className="prose border-t border-border pt-9">{children}</div>
+          {/* data-article-prose 是配图放大组件的挂载点：
+              正文是 MDX 出来的裸 HTML，只能挂载后再去增强其中的 <img> */}
+          <div className="prose border-t border-border pt-9" data-article-prose>
+            {children}
+          </div>
+
+          <ArticleImages />
 
           <div className="mt-12">{footer}</div>
         </article>
