@@ -5,9 +5,10 @@
 export const siteConfig = {
   name: "风不止的个人博客",
   author: "风不止",
-  description: "记录技术、思考与生活。这里存放风不止的笔记与文章。",
+  description: "记录技术、思考与生活。这里是风不止的个人博客。",
   // 部署后改成你的正式域名，部署前先留空也不影响本地运行
   url: "",
+  github: "https://github.com/lll114514lll1919810lll",
 } as const;
 
 export const navLinks = [

@@ -7,13 +7,28 @@ Next.js 16 + TypeScript + Tailwind CSS v4 搭建的个人博客，中文界面�
 ```bash
 pnpm install     # 安装依赖
 pnpm dev         # 启动开发服务器 http://localhost:3000
+pnpm test:server  # 一键启动测试服务器（Windows，默认 http://localhost:3000）
 pnpm build       # 生产构建（会预渲染成静态 HTML）
-pnpm start       # 预览生产构建
+pnpm start        # 预览生产构建
 
 pnpm typecheck   # 类型检查
 pnpm lint        # 代码检查
 pnpm test        # 目录锚点一致性测试（需先启动 dev server）
 ```
+
+### 一键启动测试服务器（Windows）
+
+```powershell
+pnpm test:server
+```
+
+脚本会检查依赖是否已安装，然后启动 Next.js 开发服务器。可以通过参数指定端口：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-test-server.ps1 -Port 3001
+```
+
+按 `Ctrl+C` 停止服务器。
 
 ## 目录结构
 

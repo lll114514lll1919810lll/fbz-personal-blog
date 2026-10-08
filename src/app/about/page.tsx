@@ -14,11 +14,39 @@ export default function AboutPage() {
           <p className="eyebrow">ABOUT THIS SPACE</p>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">关于</h1>
           <p className="max-w-xl text-base leading-relaxed text-secondary">
-            {siteConfig.author} 的个人博客，记录正在学习、正在实践，也记录偶尔停下来观察生活的时刻。
+            {siteConfig.author} 的个人博客，记录学习、实践，也记录偶尔停下来观察生活的时刻。
           </p>
         </div>
         <div className="about-mark" aria-hidden="true">
-          <span>FZ</span>
+          <svg
+            className="about-atom"
+            viewBox="0 0 160 160"
+            fill="none"
+            role="presentation"
+          >
+            <ellipse cx="80" cy="80" rx="62" ry="24" stroke="currentColor" strokeWidth="4" />
+            <ellipse
+              cx="80"
+              cy="80"
+              rx="62"
+              ry="24"
+              transform="rotate(60 80 80)"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <ellipse
+              cx="80"
+              cy="80"
+              rx="62"
+              ry="24"
+              transform="rotate(120 80 80)"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <circle cx="80" cy="80" r="14" fill="currentColor" />
+            <circle cx="75" cy="75" r="3" fill="var(--background)" />
+            <circle cx="86" cy="84" r="3" fill="var(--background)" />
+          </svg>
         </div>
       </header>
 
@@ -39,7 +67,7 @@ export default function AboutPage() {
           <li>
             <strong>内容格式</strong>：MDX。写文章就是新建{" "}
             <code>src/content/</code> 下的{" "}
-            <code>.mdx</code> 文件，不需要数据库，也不需要后台管理界面
+            <code>.mdx</code> 文件，不需要数据库
           </li>
           <li>
             <strong>构建方式</strong>：构建时预渲染成静态 HTML，访问速度快，对搜索引擎友好
@@ -50,7 +78,17 @@ export default function AboutPage() {
         </ul>
 
         <h2>关于我</h2>
-        <p>这里可以写你的职业、技术栈、联系方式，或者任何你想让读者知道的事。</p>
+        <p>
+          一个热爱技术、喜欢分享的开发者。你可以在{" "}
+          <a
+            href={siteConfig.github}
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub
+          </a>{" "}
+          找到我。
+        </p>
 
         <blockquote>
           <p>风不止，但行有恒。</p>

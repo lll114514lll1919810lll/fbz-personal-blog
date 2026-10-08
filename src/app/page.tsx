@@ -14,7 +14,7 @@ export default function HomePage() {
     <div className="flex flex-col gap-12 sm:gap-16">
       <section className="home-hero panel panel-strong grid gap-10 overflow-hidden px-7 py-8 sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)] lg:items-center">
         <div className="relative z-10 flex flex-col gap-5">
-          <p className="eyebrow">PERSONAL NOTES · 2026</p>
+          <p className="eyebrow">PERSONAL NOTES</p>
           <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-6xl">
             把复杂的事，<span className="text-accent">写简单。</span>
           </h1>
@@ -39,10 +39,33 @@ export default function HomePage() {
         </div>
 
         <div className="hero-orbit" aria-hidden="true">
-          <div className="hero-orbit-core">FZ</div>
+          <div className="hero-orbit-core">
+            <svg className="hero-atom" viewBox="0 0 160 160" fill="none" role="presentation">
+              <ellipse cx="80" cy="80" rx="62" ry="24" stroke="currentColor" strokeWidth="4" />
+              <ellipse
+                cx="80"
+                cy="80"
+                rx="62"
+                ry="24"
+                transform="rotate(60 80 80)"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <ellipse
+                cx="80"
+                cy="80"
+                rx="62"
+                ry="24"
+                transform="rotate(120 80 80)"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <circle cx="80" cy="80" r="14" fill="currentColor" />
+            </svg>
+          </div>
           <span className="hero-orbit-ring hero-orbit-ring-one" />
           <span className="hero-orbit-ring hero-orbit-ring-two" />
-          <span className="hero-orbit-dot hero-orbit-dot-one" />
+          <span className="hero-orbit-dot" />
           <span className="hero-orbit-dot hero-orbit-dot-two" />
         </div>
       </section>

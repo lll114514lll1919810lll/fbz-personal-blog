@@ -86,6 +86,15 @@
      --muted 在纯白上也只有 6.0:1，遇到中间调的图就跌破 4.5:1
      （亮色图上实测最差 2.25:1），所以亮色主题直接用主文字色。 */
   --eyebrow-color: var(--foreground);
+
+  /*
+    首页 hero 的原子核。浅色下 --foreground 是近黑色，拿它做径向渐变会糊成一团灰，
+    所以浅色单独给一套「亚克力玻璃球」的配色；深色那套见下面两个深色令牌块。
+  */
+  --hero-core-surface: radial-gradient(circle at 35% 28%, rgb(255 255 255 / 0.94), color-mix(in srgb, var(--accent) 7%, transparent) 62%, transparent 100%);
+  --hero-core-border: color-mix(in srgb, var(--accent) 26%, transparent);
+  --hero-core-shadow: 0 10px 24px -16px rgb(0 0 0 / 0.45);
+  --hero-core-shadow-pulse: 0 14px 30px -14px rgb(0 0 0 / 0.5);
 }
 
 /* 深色令牌（第一份）：跟随系统。
@@ -124,6 +133,11 @@
       0 0 2px rgb(0 0 0 / 0.4);
     /* 深色图上 --muted 实测只有 4.35:1，提到次级色 */
     --eyebrow-color: var(--secondary);
+    /* 与下面 :root[data-theme="dark"] 那份逐字一致，改一处必须改两处 */
+    --hero-core-surface: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--foreground) 24%, transparent), color-mix(in srgb, var(--foreground) 8%, transparent) 58%, transparent 100%);
+    --hero-core-border: color-mix(in srgb, var(--foreground) 30%, transparent);
+    --hero-core-shadow: 0 12px 34px rgb(0 0 0 / 0.14), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 4%, transparent);
+    --hero-core-shadow-pulse: 0 16px 42px rgb(0 0 0 / 0.18), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 6%, transparent);
   }
 }
 
@@ -155,6 +169,11 @@
     0 0 2px rgb(0 0 0 / 0.4);
   /* 深色图上 --muted 实测只有 4.35:1，提到次级色 */
   --eyebrow-color: var(--secondary);
+  /* 与上面媒体查询块里那份逐字一致，改一处必须改两处 */
+  --hero-core-surface: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--foreground) 24%, transparent), color-mix(in srgb, var(--foreground) 8%, transparent) 58%, transparent 100%);
+  --hero-core-border: color-mix(in srgb, var(--foreground) 30%, transparent);
+  --hero-core-shadow: 0 12px 34px rgb(0 0 0 / 0.14), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 4%, transparent);
+  --hero-core-shadow-pulse: 0 16px 42px rgb(0 0 0 / 0.18), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 @theme inline {
@@ -218,9 +237,11 @@
       linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
       var(--panel-bg-raised);
     color: var(--accent);
-    font-size: 2rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+  }
+
+  .about-atom {
+    width: 7rem;
+    height: 7rem;
   }
 
   .article-header {
@@ -492,14 +513,71 @@
   .cover-index { position: absolute; right: 1.25rem; top: 1rem; font-size: 2.6rem; font-weight: 700; letter-spacing: -0.08em; opacity: 0.7; }
 
   .home-hero { position: relative; }
-  .hero-orbit { position: relative; min-height: 240px; display: grid; place-items: center; }
-  .hero-orbit-core { z-index: 2; display: grid; width: 7rem; height: 7rem; place-items: center; border: 1px solid rgb(255 255 255 / 0.28); border-radius: 999px; background: var(--foreground); color: var(--background); font-size: 1.35rem; font-weight: 700; letter-spacing: 0.08em; box-shadow: 0 16px 50px rgb(0 0 0 / 0.18); }
-  .hero-orbit-ring { position: absolute; width: 13rem; height: 7rem; border: 1px solid var(--border); border-radius: 50%; transform: rotate(-28deg); }
-  .hero-orbit-ring-one { width: 19rem; height: 11rem; border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
-  .hero-orbit-ring-two { width: 15rem; height: 15rem; transform: rotate(35deg); opacity: 0.6; }
-  .hero-orbit-dot { position: absolute; width: 0.55rem; height: 0.55rem; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 14%, transparent); }
-  .hero-orbit-dot-one { top: 21%; right: 20%; }
-  .hero-orbit-dot-two { bottom: 20%; left: 20%; background: var(--foreground); }
+  .hero-orbit { position: relative; width: min(100%, 26rem); min-height: 240px; margin-inline: auto; display: grid; place-items: center; }
+  .hero-orbit::before { position: absolute; width: 11rem; height: 11rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 8%, transparent); filter: blur(30px); content: ""; animation: hero-aura 5s ease-in-out infinite; }
+  .hero-orbit-core { z-index: 2; display: grid; width: 6.25rem; height: 6.25rem; place-items: center; border: 1px solid var(--hero-core-border); border-radius: 999px; background: var(--hero-core-surface); color: var(--foreground); box-shadow: var(--hero-core-shadow); backdrop-filter: blur(8px); animation: hero-core-pulse 4s ease-in-out infinite; }
+  .hero-atom { width: 5rem; height: 5rem; animation: hero-atom-float 7s ease-in-out infinite; }
+  .hero-orbit-ring { position: absolute; width: calc(100% - 3rem); height: 46%; border: 1px solid var(--border); border-radius: 50%; }
+  .hero-orbit-ring-one { width: calc(100% - 3rem); height: 58%; border-color: color-mix(in srgb, var(--accent) 30%, transparent); animation: hero-ring-breathe 7s ease-in-out infinite; }
+  .hero-orbit-ring-two { width: 76%; height: 42%; opacity: 0.52; animation: hero-ring-breathe-reverse 9s ease-in-out infinite; }
+  /*
+    两个电子共用同一条椭圆轨道、同一个周期，只差半个相位：始终中心对称、速度一致。
+    offset-distance 按弧长推进，速度均匀；层级在下半圈切到核之上、上半圈切到之下，
+    做出绕到核后面的立体感（相位差半圈，一个转到前面时另一个正好转到后面）。
+  */
+  .hero-orbit-dot { position: absolute; top: 50%; left: 50%; width: 0.55rem; height: 0.55rem; margin: -0.275rem; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 14%, transparent); offset-path: ellipse(min(32vw, 8rem) min(8vw, 2rem) at 50% 50%); offset-anchor: 50% 50%; offset-rotate: 0deg; animation-name: hero-electron-orbit, hero-electron-depth; animation-duration: 6s; animation-timing-function: linear, step-end; animation-iteration-count: infinite; }
+  /* 负延迟 = 半个周期，从轨道另一端起步 */
+  .hero-orbit-dot-two { background: var(--foreground); animation-delay: -3s; }
+
+  /* 注意：不要用 hover 改 animation-duration——它会按新的时长重算进度，圆环会瞬间跳一下 */
+
+  @keyframes hero-aura {
+    0%, 100% { opacity: 0.45; transform: scale(0.88); }
+    50% { opacity: 0.8; transform: scale(1.12); }
+  }
+
+  @keyframes hero-core-pulse {
+    0%, 100% { transform: scale(0.98); box-shadow: var(--hero-core-shadow); }
+    50% { transform: scale(1.03); box-shadow: var(--hero-core-shadow-pulse); }
+  }
+
+  @keyframes hero-atom-float {
+    0%, 100% { transform: rotate(-3deg) scale(0.96); }
+    50% { transform: rotate(3deg) scale(1.02); }
+  }
+
+  @keyframes hero-ring-breathe {
+    0%, 100% { transform: scale(0.97, 0.96); opacity: 0.72; }
+    50% { transform: scale(1, 1.04); opacity: 1; }
+  }
+
+  @keyframes hero-ring-breathe-reverse {
+    0%, 100% { transform: scale(1, 0.96); opacity: 0.42; }
+    50% { transform: scale(0.96, 1.04); opacity: 0.65; }
+  }
+
+  @keyframes hero-electron-orbit {
+    from { offset-distance: 0%; }
+    to { offset-distance: 100%; }
+  }
+
+  /* step-end 让层级在中点瞬间切换；此时圆点正好在左右顶点，不在核的轮廓上 */
+  @keyframes hero-electron-depth {
+    0% { z-index: 3; }
+    50% { z-index: 1; }
+    100% { z-index: 3; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-orbit::before,
+    .hero-orbit-core,
+    .hero-atom,
+    .hero-orbit-ring-one,
+    .hero-orbit-ring-two,
+    .hero-orbit-dot { animation: none; }
+    /* 静止时两点分居左右两端 */
+    .hero-orbit-dot-two { offset-distance: 50%; }
+  }
 
   .panel {
     background-color: var(--panel-bg);
@@ -555,16 +633,12 @@
      ========================================================================== */
 
   .site-logo-badge {
-    display: grid;
+    display: block;
     width: 2rem; /* 32px */
     height: 2rem;
     place-items: center;
     border-radius: 999px;
-    background-color: var(--foreground);
-    color: var(--background);
-    font-size: 0.95rem;
-    font-weight: 600;
-    line-height: 1;
+    object-fit: cover;
     /* 一点外阴影，和亚克力面板同一套语言：像一枚贴在玻璃上的圆片 */
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
     transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1);

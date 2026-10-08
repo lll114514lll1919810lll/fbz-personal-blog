@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    ".preview/**",
     // UI 审计脚本是一次性诊断工具，用 CommonJS 跑在 Node 里，
     // 不属于应用代码，不适用 React/TS 规范
     "scripts/**/*.cjs",
