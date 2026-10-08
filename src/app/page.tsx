@@ -29,7 +29,10 @@ export default function HomePage() {
           >
             开始阅读
           </Link>
-          <Link href="/about" className="text-secondary transition-colors hover:text-foreground">
+          <Link
+            href="/about"
+            className="-my-2 inline-flex items-center py-2 text-secondary transition-colors hover:text-foreground"
+          >
             关于我 →
           </Link>
           </div>

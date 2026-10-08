@@ -64,7 +64,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
           */}
           <Link
             href="/blog"
-            className="inline-flex w-fit items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-accent/40 hover:text-accent"
+            className="inline-flex min-h-8 w-fit items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-accent/40 hover:text-accent"
           >
             <span aria-hidden>←</span>
             文章
@@ -96,7 +96,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
                     <Link
                       key={tag}
                       href={`/tags/${encodeURIComponent(tag)}`}
-                      className="inline-flex items-center rounded-full border border-border px-2.5 py-1.5 text-[11px] leading-none transition-colors hover:border-accent hover:text-accent"
+                      className="inline-flex min-h-8 items-center rounded-full border border-border px-2.5 py-1.5 text-[11px] leading-none transition-colors hover:border-accent hover:text-accent"
                     >
                       {tag}
                     </Link>

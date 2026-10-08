@@ -407,6 +407,12 @@
   }
 
   .tag-chip {
+    /* inline-flex + min-height 才能撑出 32px 触控热区：
+       min-height 对 inline 元素无效，只加 padding 只能到 31px。
+       视觉上几乎不变（原本 31px），只是把热区补满。 */
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
     border: 1px solid var(--border);
     border-radius: 999px;
     color: var(--secondary);
