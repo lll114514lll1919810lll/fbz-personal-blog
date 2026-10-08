@@ -170,6 +170,13 @@ export const metadata = {
 顶栏、底栏、正文三者的内容宽度上限统一由 `CONTENT_MAX_WIDTH`（`src/lib/site.ts`）
 控制，保证左右严格对齐。
 
+`globals.css` 里还有一条 `scrollbar-gutter: stable` 不能删：内容短的页面
+（比如标签页）不会出现纵向滚动条，可用宽度就会比长页面宽一个滚动条的宽度，
+页面之间切换时内容会轻微抖动。固定预留后所有页面宽度一致。
+
+文章页的正文宽度还可以由用户在窄/标准/宽三档间切换（见上一节），
+窄视口下正文自动占满并取消居中。
+
 **目录锚点的一致性**：`rehype-slug` 用 `github-slugger` 生成标题 id，
 所以 `getTableOfContents()` 也用同一个库算 slug，锚点跳转才可靠。
 `pnpm test` 会拿真实渲染的 HTML 对比验证这一点。
