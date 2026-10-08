@@ -24,7 +24,7 @@ export function PostNavigation({
       {previous ? (
         <Link
           href={`/blog/${previous.slug}`}
-          className="group flex flex-col gap-1 rounded-lg border border-border p-4 transition-colors hover:bg-surface"
+          className="panel-raised panel group flex flex-col gap-1 rounded-[var(--radius-panel)] p-4 transition-colors hover:border-accent/40"
         >
           <span className="text-xs text-muted">← 上一篇</span>
           <span className="text-sm font-medium transition-colors group-hover:text-accent">
@@ -38,7 +38,7 @@ export function PostNavigation({
       {next && (
         <Link
           href={`/blog/${next.slug}`}
-          className="group flex flex-col gap-1 rounded-lg border border-border p-4 text-right transition-colors hover:bg-surface sm:col-start-2"
+          className="panel-raised panel group flex flex-col gap-1 rounded-[var(--radius-panel)] p-4 text-right transition-colors hover:border-accent/40 sm:col-start-2"
         >
           <span className="text-xs text-muted">下一篇 →</span>
           <span className="text-sm font-medium transition-colors group-hover:text-accent">

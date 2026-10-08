@@ -12,7 +12,7 @@ export default function TagsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-1">
+      <header className="panel panel-strong flex flex-col gap-1 px-6 py-5">
         <h1 className="text-3xl font-bold tracking-tight">标签</h1>
         <p className="text-sm text-muted">共 {tags.length} 个</p>
       </header>
@@ -24,7 +24,7 @@ export default function TagsPage() {
               <Link
                 key={tag}
                 href={`/tags/${encodeURIComponent(tag)}`}
-                className="group flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-sm transition-colors hover:border-accent hover:bg-accent-soft"
+                className="group flex items-center gap-2 rounded-full border border-panel-edge bg-panel-raised px-3.5 py-1.5 text-sm backdrop-blur-sm transition-colors hover:border-accent hover:bg-accent-soft"
               >
                 {tag}
                 <span className="text-xs tabular-nums text-muted transition-colors group-hover:text-accent">

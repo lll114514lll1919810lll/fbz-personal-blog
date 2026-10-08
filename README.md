@@ -111,6 +111,46 @@ export const metadata = {
 
 改配色只需动 `globals.css` 顶部的 CSS 变量，明暗两套值一一对应。
 
+### 亚克力面板
+
+所有内容面板都是**圆角毛玻璃**（半透明底 + `backdrop-filter` 背景模糊），
+浮在页面背景之上。默认背景是纯色，看起来就是干净的面板；一旦放上背景图，
+图片会从面板下面透出来，文字仍然清晰。
+
+三档面板底色，按「需要多实」区分：
+
+| 类名 | 不透明度（浅/深） | 用在哪 |
+| --- | --- | --- |
+| `.panel` | 0.72 / 0.74 | 顶栏、底栏、卡片、目录侧栏 |
+| `.panel-strong` | 0.86 / 0.88 | 文章正文、页面标题区（长文阅读要更实的底） |
+| `.panel-raised` | 0.6 / 0.62 | 代码块、标签、上下篇导航（叠在别的面板之上） |
+
+**放背景图**：把图片放进 `public/`，然后在 `globals.css` 的 `:root` 里改一行：
+
+```css
+--bg-image: url("/bg.jpg");
+```
+
+图片会以 `cover` 居中固定铺满。没有图片时（默认 `none`）一切照常。
+
+**两个必须注意的实现细节**（都踩过）：
+
+1. **`.panel` 必须写在 `@layer components` 里。** Tailwind v4 把工具类放在
+   `@layer utilities`，而**无层样式优先级高于任何层**。写在层外的话，
+   `.panel` 的 `background-color` 会永远压过 `group-hover:bg-panel-strong`，
+   卡片悬停变色会静默失效。
+2. **不要手写 `-webkit-backdrop-filter`。** 同时写标准和前缀两条时，
+   Lightning CSS 合并这对声明会把两条都丢掉，毛玻璃整个失效。
+   只写标准属性，前缀由构建工具按浏览器目标自动补。
+
+面板令牌同时注册成了 Tailwind 主题色，所以可以用 `bg-panel` /
+`bg-panel-strong` / `bg-panel-raised` / `border-panel-edge` 这些工具类。
+直接用 `bg-[var(--panel-bg-strong)]` 是不行的——Tailwind 判断不出那是个颜色，
+不会生成工具类，悬停态会静默失效。
+
+无障碍：`prefers-reduced-transparency: reduce` 下退化成实色面板；
+不支持 `backdrop-filter` 的浏览器同理（`@supports` 兜底）。
+
 ### 页面切换过渡
 
 用 React 19.2 canary 的 `<ViewTransition>` 实现，App Router 路由切换本身就是

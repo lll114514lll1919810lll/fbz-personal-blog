@@ -177,6 +177,20 @@ const CHECKS = {
       // 过滤被父级覆盖的重复链接（如卡片里的整行热区链接）
       const style = getComputedStyle(el);
       if (style.position === 'absolute' && r.width > vw * 0.8) continue;
+
+      /*
+         WCAG 2.5.8 的「行内」豁免：夹在句子中间的文字链接，
+         尺寸受行高约束、撑不大，规范明确不要求它达标。
+         给这种链接加内边距反而会破坏行距、让段落变丑。
+       */
+      const parent = el.parentElement;
+      const isInlineInSentence =
+        el.tagName === 'A' &&
+        parent &&
+        /^(P|LI|SPAN|EM|STRONG|BLOCKQUOTE|TD)$/.test(parent.tagName) &&
+        (parent.textContent || '').trim().length > (el.textContent || '').trim().length + 4;
+      if (isInlineInSentence) continue;
+
       if (r.height < 32 || r.width < 24) {
         small.push({
           tag: el.tagName.toLowerCase(),
@@ -214,13 +228,18 @@ const CHECKS = {
   `,
 
   // 8. 焦点可见性：键盘导航时是否有清晰的焦点环
+  //
+  // 注意：这里只读当前焦点元素的样式，真正的 Tab 按键由 auditAnimations
+  // 里的键盘事件驱动（见下方 focusRingByKeyboard）。用 element.focus()
+  // 不会触发 :focus-visible，直接查会得到「无焦点环」的假警报。
   focusRing: `
-    const btn = document.querySelector('main a, main button');
-    if (!btn) return { skip: 'no focusable in main' };
-    btn.focus();
-    const cs = getComputedStyle(btn);
+    const el = document.activeElement;
+    if (!el || el === document.body) return { skip: '没有元素处于焦点' };
+    const cs = getComputedStyle(el);
     return {
-      tag: btn.tagName.toLowerCase(),
+      tag: el.tagName.toLowerCase(),
+      text: (el.textContent || '').trim().slice(0, 20),
+      matchesFocusVisible: el.matches(':focus-visible'),
       outlineWidth: cs.outlineWidth,
       outlineStyle: cs.outlineStyle,
       outlineColor: cs.outlineColor,
@@ -359,12 +378,71 @@ async function auditAnimations(send) {
     return { card: pick(el), title: pick(title), progressBar: pick(bar) };
   `);
 
+  /*
+     4b. 焦点环：必须用真实键盘事件驱动。
+     :focus-visible 只在「用户用键盘导航」时命中，程序化调用 focus()
+     不算——这也是为什么单独查 getComputedStyle 会得到假警报。
+   */
+  await goto(send, `${BASE}/blog`, 1280, 900);
+  const focusTrail = [];
+  for (let i = 0; i < 3; i++) {
+    for (const type of ['keyDown', 'keyUp']) {
+      await send('Input.dispatchKeyEvent', {
+        type,
+        key: 'Tab',
+        code: 'Tab',
+        windowsVirtualKeyCode: 9,
+        nativeVirtualKeyCode: 9,
+      });
+    }
+    await sleep(180);
+    focusTrail.push(
+      await evaluate(
+        send,
+        `
+      const el = document.activeElement;
+      if (!el || el === document.body) return { tag: 'BODY' };
+      const cs = getComputedStyle(el);
+      return {
+        tag: el.tagName.toLowerCase(),
+        text: (el.textContent || '').trim().slice(0, 18),
+        focusVisible: el.matches(':focus-visible'),
+        outlineWidth: cs.outlineWidth,
+        outlineStyle: cs.outlineStyle,
+        outlineColor: cs.outlineColor,
+      };
+    `,
+      ),
+    );
+  }
+  const ringed = focusTrail.filter(
+    (f) => f.focusVisible && parseFloat(f.outlineWidth) > 0 && f.outlineStyle !== 'none',
+  );
+  out.focusRingByKeyboard = {
+    trail: focusTrail,
+    ok: ringed.length === focusTrail.filter((f) => f.tag !== 'BODY').length && ringed.length > 0,
+  };
+
   // 5. 移动端折叠目录：点击后是否展开
   await goto(send, `${BASE}/blog/nextjs-16-breaking-changes`, 390, 844);
-  const beforeOpen = await evaluate(send, `
+
+  /*
+     不能用「可见链接数量」判断展开：面板收起靠的是 grid-template-rows: 0fr
+     加 overflow: hidden，子元素被裁切但 getBoundingClientRect() 仍返回原始高度。
+     量容器自身的渲染高度才是可靠的展开信号。
+   */
+  const TOC_PANEL_HEIGHT = `
     const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('本文目录'));
-    return { found: !!btn, expanded: btn ? btn.getAttribute('aria-expanded') : null, items: document.querySelectorAll('button ~ ul a').length };
-  `);
+    if (!btn) return { found: false };
+    const panel = btn.nextElementSibling;
+    return {
+      found: true,
+      expanded: btn.getAttribute('aria-expanded'),
+      panelHeight: panel ? Math.round(panel.getBoundingClientRect().height) : null,
+    };
+  `;
+
+  const beforeOpen = await evaluate(send, TOC_PANEL_HEIGHT);
   const { result: cbtn } = await send('Runtime.evaluate', {
     returnByValue: true,
     expression: `(() => {
@@ -377,13 +455,17 @@ async function auditAnimations(send) {
   if (cbtn.value) {
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: cbtn.value.x, y: cbtn.value.y, button: 'left', clickCount: 1 });
     await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: cbtn.value.x, y: cbtn.value.y, button: 'left', clickCount: 1 });
-    await sleep(500);
+    await sleep(700);
   }
-  const afterOpen = await evaluate(send, `
-    const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('本文目录'));
-    return { expanded: btn ? btn.getAttribute('aria-expanded') : null, items: document.querySelectorAll('button ~ ul a').length };
-  `);
-  out.mobileToc = { beforeOpen, afterOpen, expands: afterOpen.expanded === 'true' && afterOpen.items > beforeOpen.items };
+  const afterOpen = await evaluate(send, TOC_PANEL_HEIGHT);
+  out.mobileToc = {
+    beforeOpen,
+    afterOpen,
+    expands:
+      beforeOpen.found &&
+      afterOpen.expanded === 'true' &&
+      (afterOpen.panelHeight ?? 0) > (beforeOpen.panelHeight ?? 0) + 20,
+  };
 
   return out;
 }

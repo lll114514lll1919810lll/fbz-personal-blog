@@ -10,8 +10,8 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-16 sm:gap-20">
-      {/* 站点介绍 */}
-      <section className="flex flex-col gap-5">
+      {/* 站点介绍：也是一块亚克力面板，和大标题一起浮在背景图上 */}
+      <section className="panel panel-strong flex flex-col gap-5 px-7 py-8">
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
           {siteConfig.name}
         </h1>
@@ -48,8 +48,9 @@ export default function HomePage() {
           )}
         </div>
 
+        {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线） */}
         {latest.length > 0 ? (
-          <div className="flex flex-col">
+          <div className="flex flex-col gap-3">
             {latest.map((post) => (
               <PostCard key={post.slug} post={post} />
             ))}

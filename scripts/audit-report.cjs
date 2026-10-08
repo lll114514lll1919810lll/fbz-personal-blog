@@ -138,13 +138,23 @@ for (const [k, v] of Object.entries(report)) {
 }
 if (!sibFound) console.log('✓ 未发现非预期的元素重叠');
 
-section('8. 焦点样式');
-const fr = report['桌面/文章详情']?.focusRing || report['移动/文章详情']?.focusRing;
-if (fr && !fr.skip) {
-  console.log(`   ${fr.tag}: outline ${fr.outlineWidth} ${fr.outlineStyle} ${fr.outlineColor}`);
-  if (fr.outlineStyle === 'none' || parseFloat(fr.outlineWidth) === 0) console.log('   ✗ 无可见焦点环');
-  else console.log('   ✓ 有焦点环');
-} else console.log('   (跳过)');
+section('8. 焦点样式（用真实 Tab 键验证）');
+/*
+  这里刻意不看页面加载时的 focusRing 值：:focus-visible 只在键盘导航时命中，
+  必须真按 Tab 才测得准。早先版本用 element.focus() 查，一直是假警报。
+*/
+const kb = report.__animations__?.focusRingByKeyboard;
+if (kb) {
+  for (const f of kb.trail) {
+    const ok = f.focusVisible && parseFloat(f.outlineWidth) > 0 && f.outlineStyle !== 'none';
+    console.log(
+      `   ${ok ? '✓' : '✗'} <${f.tag}> "${f.text ?? ''}"  focus-visible=${f.focusVisible}  outline=${f.outlineWidth} ${f.outlineStyle} ${f.outlineColor}`,
+    );
+  }
+  console.log(`   ${kb.ok ? '✓ 键盘导航有清晰焦点环' : '✗ 焦点环缺失'}`);
+} else {
+  console.log('   (跳过)');
+}
 
 section('9. 层叠关系（进度条 vs 吸顶导航）');
 const z = report['桌面/文章详情']?.zIndexStack;
@@ -192,8 +202,14 @@ if (tr) {
 
 const mt = a.mobileToc;
 if (mt) {
-  console.log(`移动端目录：点击前 expanded=${mt.beforeOpen.expanded} 条目=${mt.beforeOpen.items}`);
-  console.log(`           点击后 expanded=${mt.afterOpen.expanded} 条目=${mt.afterOpen.items}`);
+  // 用面板渲染高度判断展开：收起是靠 grid-rows-0fr + overflow-hidden，
+  // 链接的 getBoundingClientRect 不受裁切影响，数量不变。
+  console.log(
+    `移动端目录：点击前 expanded=${mt.beforeOpen.expanded} 面板高=${mt.beforeOpen.panelHeight}px`,
+  );
+  console.log(
+    `           点击后 expanded=${mt.afterOpen.expanded} 面板高=${mt.afterOpen.panelHeight}px`,
+  );
   console.log(`   ${mt.expands ? '✓ 点击可展开' : '✗ 点击未展开'}`);
 }
 

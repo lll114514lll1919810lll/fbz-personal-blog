@@ -6,14 +6,18 @@ import { LinkPending } from "@/components/link-pending";
 /**
  * 文章列表里的一项。
  *
+ * 一张卡片就是一个独立圆角亚克力面板，浮在背景图之上。
+ * 卡片之间靠间距分隔（父容器 gap-3），不再用分隔线——
+ * 面板本身有边框和阴影，再加横线会显得脏。
+ *
  * 微交互思路（极简风格）：
  * - 平时只有标题和时间，摘要淡到几乎看不见，保持列表的克制
- * - 悬停时整行泛出淡底色，摘要和标签淡入，露出更多信息
+ * - 悬停时面板底色变实一点，摘要和标签淡入，露出更多信息
  * - 标题左侧有一条短横线，悬停时横向延展，作为「这里可点」的暗示
  */
 export function PostCard({ post }: { post: Post }) {
   return (
-    <article className="group relative border-b border-border last:border-b-0">
+    <article className="group relative">
       {/* 用绝对定位的链接铺满整行作为悬停热区，比只让文字可点更好点。
           tabIndex={-1} 让它不进入 Tab 顺序，键盘用户走下方的真实链接。
 
@@ -22,14 +26,17 @@ export function PostCard({ post }: { post: Post }) {
           用户能立刻确认点击生效（本地几乎无感，真实网络下很有用）。 */}
       <Link
         href={`/blog/${post.slug}`}
-        className="absolute inset-0 z-0"
+        className="absolute inset-0 z-0 rounded-[var(--radius-panel)]"
         aria-label={post.title}
         tabIndex={-1}
       >
         <LinkPending />
       </Link>
 
-      <div className="pointer-events-none relative z-10 flex flex-col gap-2 py-6 transition-colors duration-200 group-hover:bg-surface sm:px-4 sm:-mx-4 sm:rounded-lg">
+{/* pointer-events-none 必须保留：内容层盖在热区链接之上，
+            去掉它点击标题就不会导航了（事件被这一层吃掉）。
+            悬停效果靠 group-hover 从 article 上继承，不影响。 */}
+      <div className="panel pointer-events-none relative z-10 flex flex-col gap-2 px-5 py-5 transition-colors duration-200 group-hover:border-accent/30 group-hover:bg-panel-strong">
         <div className="flex items-baseline gap-3 text-[13px]">
           <time
             dateTime={post.date}

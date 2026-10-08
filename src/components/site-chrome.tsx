@@ -4,12 +4,12 @@ import { LinkPending } from "@/components/link-pending";
 
 export function SiteHeader() {
   return (
-    // 外层负责全宽：背景和下边框线一直延伸到屏幕两端
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-md">
-      {/* 内层限制内容宽度并居中。用较宽的上限，让站名和导航更靠近屏幕两侧，
-          避免在超宽屏上挤在中间一小块。 */}
+    /* 顶栏做成悬浮的圆角亚克力条：
+       外层只负责吸顶和留出四周缝隙，面板本身由内层承担，
+       这样它能浮在背景图之上，而不是把整条横幅糊死。 */
+    <header className="sticky top-3 z-50 w-full px-4">
       <div
-        className="mx-auto flex h-14 items-center justify-between px-6"
+        className="panel mx-auto flex h-14 items-center justify-between px-5"
         style={{ maxWidth: CONTENT_MAX_WIDTH }}
       >
         {/* 链接用 py 撑出 44px 高的可点区域（触控热区标准），
@@ -39,9 +39,9 @@ export function SiteHeader() {
 
 export function SiteFooter() {
   return (
-    <footer className="mt-auto w-full border-t border-border">
+    <footer className="mt-auto w-full px-4 pb-4 pt-10">
       <div
-        className="mx-auto flex flex-col gap-1 px-6 py-10 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between"
+        className="panel mx-auto flex flex-col gap-1 px-6 py-6 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between"
         style={{ maxWidth: CONTENT_MAX_WIDTH }}
       >
         <p>

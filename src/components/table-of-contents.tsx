@@ -231,7 +231,7 @@ function Sidebar({ items }: { items: TocItem[] }) {
         滚动条会占掉约 10px 内容宽度，文字区跟着变窄——展开收起时
         整块文字左右跳动。stable 让这段空间始终预留，文字宽度不再变。
       */
-      className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto overflow-x-hidden pl-1 [scrollbar-gutter:stable]"
+      className="panel sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto overflow-x-hidden rounded-[var(--radius-panel)] p-3 [scrollbar-gutter:stable]"
     >
       <p className="mb-3 pl-4 text-xs font-medium tracking-wide text-muted">
         本文目录
@@ -439,7 +439,7 @@ function Collapsible({ items }: { items: TocItem[] }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-2.5 text-sm transition-colors hover:bg-surface"
+        className="panel flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
       >
         <span className="font-medium">本文目录</span>
         <span className="flex items-center gap-2 text-xs text-muted">
@@ -470,7 +470,7 @@ function Collapsible({ items }: { items: TocItem[] }) {
         }`}
       >
         <ul className="overflow-hidden">
-          <li className="rounded-lg border border-border bg-surface p-3">
+          <li className="panel-raised panel rounded-lg p-3">
             <ul className="space-y-0.5">
               {tree.map((node) => {
             const hasChildren = node.children.length > 0;

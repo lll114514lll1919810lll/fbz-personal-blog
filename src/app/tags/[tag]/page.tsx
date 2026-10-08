@@ -31,7 +31,7 @@ export default async function TagPage({ params }: PageProps<"/tags/[tag]">) {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-1">
+      <header className="panel panel-strong flex flex-col gap-1 px-6 py-5">
         <h1 className="text-3xl font-bold tracking-tight">
           <span className="text-accent">#</span>
           {decoded}
@@ -42,8 +42,9 @@ export default async function TagPage({ params }: PageProps<"/tags/[tag]">) {
       {/* 同一套筛选栏，当前标签高亮，「全部」可一键清除筛选 */}
       <TagFilterBar tags={getAllTags()} activeTag={decoded} />
 
+      {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线） */}
       {posts.length > 0 ? (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-3">
           {posts.map((post) => (
             <PostCard key={post.slug} post={post} />
           ))}

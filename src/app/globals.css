@@ -1,25 +1,49 @@
 @import "tailwindcss";
 
 /* ============================================================================
-   设计基调：极简约束
+   设计基调：极简约束 + 圆角亚克力面板
    - 近乎单色的中性灰阶，只有「一个」饱和色用于交互提示（链接、目录高亮）
-   - 大量留白，细分割线，无阴影装饰
+   - 所有内容面板是半透明毛玻璃（亚克力），圆角，浮在背景图上
    - 明暗两套配色跟随系统，色值一一对应
 
    两套灰色的分工（括号内为实测对比度，正文需满足 WCAG AA 4.5:1）：
    --secondary  承载需要读清的次级信息：摘要、元信息
    --muted      仅用于装饰：列表圆点、分隔线、占位
+
+   背景图：默认没有。想加就把图片放进 public/，然后在 globals.css 末尾
+   给 --bg-image 赋 url(...)。面板的半透明会让图片在内容下方透出来，
+   同时保证文字可读。
    ========================================================================= */
 
 :root {
   --background: #ffffff;
-  --surface: #fafafa; /* 卡片/悬浮层，比页面底色略深一点点 */
+  --surface: #fafafa; /* 面板内部的浅底：行内代码、表头 */
   --foreground: #171717;
   --secondary: #52525b; /* 次级文字：摘要、元信息  7.73:1 */
   --muted: #71717a; /* 装饰与占位               4.83:1 */
   --border: #e4e4e7;
   --accent: #2563eb; /* 全站唯一强调色 */
   --accent-soft: #eff6ff;
+
+  /* --- 亚克力面板 --- */
+  /* 面板底色带透明度：这是「亚克力」的核心，背景图能从下面透出来。
+     0.72 是在可读性和通透感之间取的平衡——再透文字就开始糊。 */
+  --panel-bg: rgb(255 255 255 / 0.72);
+  /* 阅读面板（文章正文）需要更实的底，长文读起来才不费眼 */
+  --panel-bg-strong: rgb(255 255 255 / 0.86);
+  /* 内层小面板（代码块、标签）：比外层略实一点，避免层层叠加后太花 */
+  --panel-bg-raised: rgb(255 255 255 / 0.6);
+  --panel-border: rgb(0 0 0 / 0.07);
+  /* 顶部内高光：模拟玻璃边缘的折射，是亚克力质感的关键一笔 */
+  --panel-highlight: rgb(255 255 255 / 0.7);
+  --panel-blur: 14px;
+  --panel-saturate: 180%;
+  /* 阴影很克制：只用来把面板从背景图上「抬起来」，不做装饰 */
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -14px rgb(0 0 0 / 0.16);
+  --radius-panel: 14px;
+
+  /* 背景图：默认无。换成 url("/bg.jpg") 即可启用 */
+  --bg-image: none;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -32,6 +56,14 @@
     --border: #26262a;
     --accent: #60a5fa;
     --accent-soft: #172033;
+
+    /* 深色下提高不透明度：深色面板透出亮背景图时文字最容易糊 */
+    --panel-bg: rgb(22 22 26 / 0.74);
+    --panel-bg-strong: rgb(22 22 26 / 0.88);
+    --panel-bg-raised: rgb(30 30 36 / 0.62);
+    --panel-border: rgb(255 255 255 / 0.09);
+    --panel-highlight: rgb(255 255 255 / 0.06);
+    --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
   }
 }
 
@@ -44,10 +76,90 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --radius-panel: var(--radius-panel);
+
+  /*
+    把面板令牌也注册成 Tailwind 主题色，这样才能用 bg-panel /
+    bg-panel-strong / border-panel-edge 这类工具类。
+    直接用 bg-[var(--panel-bg-strong)] 是不行的——Tailwind 判断不出
+    那是个颜色，不会生成对应的工具类，悬停态会静默失效。
+  */
+  --color-panel: var(--panel-bg);
+  --color-panel-strong: var(--panel-bg-strong);
+  --color-panel-raised: var(--panel-bg-raised);
+  --color-panel-edge: var(--panel-border);
+}
+
+/* ============================================================================
+   亚克力面板
+
+   必须包在 @layer components 里。Tailwind v4 把工具类放在
+   @layer utilities，而**无层样式的优先级高于任何层**——如果 .panel
+   写在层外，它的 background-color 会永远压过 group-hover:bg-panel-strong
+   这类工具类，悬停变色就会静默失效（踩过一次）。
+   放进 components 层后，utilities 层在它之后，工具类正常生效。
+   ========================================================================= */
+
+@layer components {
+  .panel {
+    background-color: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-panel);
+    /*
+      顶部内高光 + 外阴影，两件事一起做：
+      内高光给玻璃感；外阴影把面板从背景图上「抬起来」。
+    */
+    box-shadow:
+      inset 0 1px 0 var(--panel-highlight),
+      var(--panel-shadow);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+  }
+
+  /** 阅读面板：文章正文用更实的底，长文不费眼 */
+  .panel-strong {
+    background-color: var(--panel-bg-strong);
+  }
+
+  /** 内嵌面板：代码块、标签这类叠在别的面板之上的小面板 */
+  .panel-raised {
+    background-color: var(--panel-bg-raised);
+  }
+
+  /**
+   * 降级一：浏览器不支持 backdrop-filter（老 Firefox 等）。
+   * 直接用不透明底色，牺牲通透感换可读性。
+   */
+  @supports not (backdrop-filter: blur(1px)) {
+    .panel,
+    .panel-strong,
+    .panel-raised {
+      background-color: var(--background);
+    }
+  }
+
+  /**
+   * 降级二：用户要求降低透明度（无障碍设置）。
+   * 毛玻璃会让部分人看不清，此时退化成实色面板。
+   */
+  @media (prefers-reduced-transparency: reduce) {
+    .panel,
+    .panel-strong,
+    .panel-raised {
+      background-color: var(--background);
+      backdrop-filter: none;
+    }
+  }
 }
 
 body {
-  background: var(--background);
+  /* 背景色在最底层，图片盖在它上面（图片没加载出来时也好看）。
+     面板是半透明的，图片就从面板下面透出来。 */
+  background-color: var(--background);
+  background-image: var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
 }
@@ -286,14 +398,34 @@ html {
 .code-block pre {
   /* 覆盖 .prose pre 的默认样式：这里需要为工具条留出顶部空间 */
   margin: 0;
-  /* 底部留 1.5rem 给横向滚动条，滚动条才不会紧贴最后一行代码 */
-  padding: 2.6rem 1.25rem 1.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  /* 顶部 3.1rem 给工具条（含 32px 高的复制按钮）留出空间，
+     底部留 1.5rem 给横向滚动条，滚动条才不会紧贴最后一行代码 */
+  padding: 3.1rem 1.25rem 1.5rem;
+  /* 亚克力：代码块也是面板，但用 raised 那档（更透），
+     因为它通常叠在文章面板之上，再实就显厚重了 */
+  background-color: var(--panel-bg-raised);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-panel);
+  box-shadow: inset 0 1px 0 var(--panel-highlight);
+  backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
   overflow-x: auto;
   line-height: 1.7;
   position: relative;
+}
+
+/* 代码块和正文面板都是半透明的，两层叠加后语法配色会发灰。
+   在不支持 backdrop-filter 或用户要求降低透明度时，用实底保住可读性。 */
+@supports not (backdrop-filter: blur(1px)) {
+  .code-block pre {
+    background-color: var(--surface);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .code-block pre {
+    background-color: var(--surface);
+    backdrop-filter: none;
+  }
 }
 
 .code-block pre:focus-visible {
@@ -301,11 +433,13 @@ html {
   outline-offset: 2px;
 }
 
-/* 工具条：语言标签 + 复制按钮，默认低调，悬停代码块时浮现 */
+/* 工具条：语言标签 + 复制按钮，默认低调，悬停代码块时浮现。
+   按钮有 32px 的触控热区，所以工具条整体上移一点、代码块顶部多留些白，
+   否则按钮会顶出代码块边界。 */
 .code-block-toolbar {
   position: absolute;
-  top: 0.55rem;
-  right: 0.6rem;
+  top: 0.35rem;
+  right: 0.5rem;
   left: 0.9rem;
   z-index: 2;
   display: flex;
@@ -329,8 +463,12 @@ html {
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.3rem;
-  padding: 0.25rem 0.5rem;
+  /* min-height 32px：按钮平时是透明的，撑高只扩大点击热区，
+     视觉上图标文字大小不变。手机上一根手指点得准。 */
+  min-height: 32px;
+  padding: 0.25rem 0.6rem;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;

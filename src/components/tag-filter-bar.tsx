@@ -62,10 +62,10 @@ function FilterChip({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center rounded-full border px-3 py-1.5 text-sm transition-colors ${
+      className={`flex items-center rounded-full border px-3 py-1.5 text-sm backdrop-blur-sm transition-colors ${
         active
-          ? "border-accent bg-accent-soft text-accent"
-          : "border-border text-secondary hover:border-accent hover:text-accent"
+          ? "border-accent/40 bg-accent-soft text-accent"
+          : "border-panel-edge bg-panel-raised text-secondary hover:border-accent hover:text-accent"
       }`}
     >
       {children}

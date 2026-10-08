@@ -46,9 +46,12 @@ export function PostBody({
           调宽度时正文跟着变宽，两侧留白重新分配。 */}
       <div className="flex flex-col gap-10 xl:flex-row xl:items-start xl:justify-center xl:gap-12">
         {/* w-full 而不是 flex-1：让 maxWidth 真正生效。
-            flex-1 会把元素撑满可用空间，maxWidth 就形同虚设。 */}
+            flex-1 会把元素撑满可用空间，maxWidth 就形同虚设。
+
+            panel-strong：整篇文章是一块阅读面板，用更实的底
+            （0.86 而不是 0.72），长文叠在背景图上才不费眼。 */}
         <article
-          className="w-full min-w-0 transition-[max-width] duration-300 ease-out"
+          className="panel panel-strong w-full min-w-0 px-5 py-6 transition-[max-width] duration-300 ease-out sm:px-7"
           style={{ maxWidth: width.maxWidth }}
         >
           {header}
@@ -124,7 +127,9 @@ function WidthControl({
           type="button"
           onClick={onAdvance}
           title={`当前「${label}」：${hint}。点击切换为「${nextLabel}」`}
-          className="group flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[12px] text-secondary transition-colors hover:border-accent hover:text-accent"
+          /* min-h-8（32px）保证触控热区达标：按钮本身字很小，
+             但手机上一根手指点下去需要足够的面积 */
+          className="group flex min-h-8 items-center gap-1 rounded-md border border-panel-edge bg-panel-raised px-2.5 py-1.5 text-[12px] text-secondary backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
         >
           <span className="tabular-nums">{label}</span>
           <svg

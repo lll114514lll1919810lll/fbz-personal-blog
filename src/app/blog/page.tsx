@@ -14,7 +14,7 @@ export default function BlogPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-1">
+      <header className="panel panel-strong flex flex-col gap-1 px-6 py-5">
         <h1 className="text-3xl font-bold tracking-tight">文章</h1>
         <p className="text-sm text-muted">共 {posts.length} 篇</p>
       </header>
@@ -22,8 +22,9 @@ export default function BlogPage() {
       {/* 顶部标签筛选：点某个标签跳到 /tags/<标签>，那里只显示该标签的文章 */}
       <TagFilterBar tags={tags} />
 
+      {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线） */}
       {posts.length > 0 ? (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-3">
           {posts.map((post) => (
             <PostCard key={post.slug} post={post} />
           ))}
