@@ -44,10 +44,15 @@ src/
 │   ├── use-active-heading.ts 目录滚动高亮的 hook
 │   ├── tag-filter-bar.tsx  标签筛选栏
 │   ├── code-block.tsx      代码块交互（复制 / 语言标签 / 渐变）
+│   ├── site-logo.tsx       顶栏站点标识（占位圆形图标）← 换正式 logo 看这里
+│   ├── site-chrome.tsx     顶栏 / 底栏
+│   ├── theme-toggle.tsx    明暗切换开关
 │   └── reading-progress.tsx 顶部阅读进度条
 ├── lib/
 │   ├── posts.ts            读取 content/ 的工具函数
 │   ├── site.ts             站名、导航、CONTENT_MAX_WIDTH ← 改站点信息看这里
+│   ├── theme.ts            主题的类型 / 存储键 / 首帧前生效的内联脚本
+│   ├── use-theme.ts        主题的读写、切换、订阅
 │   ├── reading-width.ts    正文宽度档位 + localStorage 持久化
 │   └── date.ts             日期格式化
 └── mdx-components.tsx      全局 MDX 组件映射
@@ -94,6 +99,14 @@ export const metadata = {
 靠留白和细分割线组织信息，不做阴影和多色装饰。明暗两套配色默认跟随系统，
 顶栏右侧的开关可以手动覆盖。
 
+顶栏左侧不是站名文字，而是一枚 **32px 圆形占位图标**（底色 `--foreground`、
+字 `--background`，和明暗切换开关的滑块同一套配色逻辑）。站名仍然出现在
+浏览器标题、首页大标题和页脚里，所以只是顶栏不重复它而已。
+
+换正式 logo 只改一个文件 `src/components/site-logo.tsx`：把里面的 `<span>`
+换成 `<Image>` 或 SVG 即可，32px 尺寸和圆形裁切都由 `.site-logo-badge` 负责。
+注意链接里没有可读文字了，`aria-label` 必须保留，否则读屏只会念出「链接」。
+
 三个交互特性：
 
 | 特性 | 实现 | 说明 |
@@ -111,6 +124,7 @@ export const metadata = {
 | 代码高亮 | `next.config.ts` + Shiki | 构建期高亮，明暗双主题跟随主题开关，零客户端 JS |
 | 代码块交互 | `code-block.tsx` | 复制按钮、语言标签、横向滚动渐变提示 |
 | 明暗切换 | `theme-toggle.tsx` + `lib/use-theme.ts` | 顶栏右侧开关；默认跟随系统，手动选择存 localStorage，刷新不闪白 |
+| 站点标识 | `site-logo.tsx` | 顶栏左侧 44px 热区的圆形占位图标，换成正式 logo 只改这一个文件 |
 
 改配色只需动 `globals.css` 顶部的 CSS 变量，明暗两套值一一对应。
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CONTENT_MAX_WIDTH, navLinks, siteConfig } from "@/lib/site";
 import { LinkPending } from "@/components/link-pending";
+import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
@@ -23,14 +24,11 @@ export function SiteHeader() {
         className="mx-auto flex h-14 items-center justify-between px-6"
         style={{ maxWidth: CONTENT_MAX_WIDTH }}
       >
-        {/* 链接用 py 撑出 44px 高的可点区域（触控热区标准），
-            视觉上仍是小字，不影响排版密度 */}
-        <Link
-          href="/"
-          className="-my-2 flex items-center py-2 text-sm font-semibold tracking-tight transition-colors hover:text-accent"
-        >
-          {siteConfig.name}
-        </Link>
+        {/* 站点标识：占位圆形图标，见 site-logo.tsx。
+            原来是站名文字，换成图标后顶栏左侧只占 44px，
+            窄屏上让出了大量空间（320px 下品牌与首个链接的间距
+            从 2.8px 变成 90px 以上） */}
+        <SiteLogo />
 
         {/* 开关放在 nav 外面：它是站点控件，不是导航链接，
             混进去会让读屏在「导航」这一块里念到它 */}
