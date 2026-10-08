@@ -536,12 +536,28 @@ DELETE /api/comments?id=<id>&key=<ADMIN_KEY>  管理员删除
   昵称可留空，记作「路人」。
 - **不存 IP。** 只存加盐 SHA-256 哈希，仅用于限流；数据库里不留访客真实 IP。
 - **限流**：同一 IP 10 分钟内最多 3 条。
-- **管理**：删除需要 `ADMIN_KEY`，前端不持有。密钥比较用逐字节异或累加而非
-  `===`，避免通过响应时间差逐位猜出密钥。
-- **D1 绑定的默认状态是注释掉的**：`database_id` 必须是真实存在的数据库，
-  否则部署会失败。建库之后再启用。
+- **管理**：登录与删除都需要 `ADMIN_KEY`，前端不持有。密钥比较用常量时间，
+  避免通过响应时间差逐位猜出密钥。
 
-### 启用步骤
+### 本仓库当前已配置好
+
+D1 数据库已创建（区域 APAC），`wrangler.toml` 里的绑定指向它，
+`db/schema.sql` 也已在远程库执行完毕。密钥通过 wrangler 设置：
+
+```bash
+# 查看已设置的密钥（值不回显）
+npx wrangler pages secret list --project-name fbz-personal-blog
+
+# 更换管理员密钥（改完需要重新部署才生效）
+echo "你的新密钥（至少 16 位）" | npx wrangler pages secret put ADMIN_KEY --project-name fbz-personal-blog
+```
+
+> **改动密钥或绑定后必须重新部署**：Pages 的环境变量和密钥在部署时注入，
+> 推一次 commit 即可触发。
+
+### 从零重建的步骤
+
+换了账号或想重建时按这个顺序：
 
 **1. 创建 D1 数据库**
 
@@ -550,7 +566,11 @@ npx wrangler login
 npx wrangler d1 create fbz-blog-comments
 ```
 
-把输出的 `database_id` 填进 `wrangler.toml`，并取消 `[[d1_databases]]` 一段的注释。
+把输出的 `database_id` 填进 `wrangler.toml` 的 `[[d1_databases]]`。
+
+> 这一步不能省着随便填：`database_id` 必须指向真实存在的库，
+> 否则 Cloudflare 会因为找不到数据库而让**部署失败**。
+> 本仓库最初就是先把这段注释掉、等建库后再启用的。
 
 **2. 建表**
 
@@ -558,9 +578,14 @@ npx wrangler d1 create fbz-blog-comments
 npx wrangler d1 execute fbz-blog-comments --remote --file=db/schema.sql
 ```
 
-**3. 配置环境变量**
+**3. 配置密钥**
 
-Cloudflare 后台 → Pages 项目 → 设置 → 变量与机密，添加两个**加密**变量：
+```bash
+echo "至少 16 位的随机串" | npx wrangler pages secret put ADMIN_KEY --project-name fbz-personal-blog
+echo "另一串随机字符"     | npx wrangler pages secret put IP_SALT   --project-name fbz-personal-blog
+```
+
+也可以走 Cloudflare 后台 → Pages 项目 → 设置 → 变量与机密，效果相同。
 
 | 变量名 | 说明 |
 | --- | --- |
