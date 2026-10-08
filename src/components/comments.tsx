@@ -51,6 +51,8 @@ export function Comments({ page }: { page: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [notice, setNotice] = useState("");
+  /** 是否跑在本机（决定显示开发者提示还是访客提示） */
+  const [isLocal, setIsLocal] = useState(false);
 
   const [name, setName] = useState("");
   const [text, setText] = useState("");
@@ -86,6 +88,22 @@ export function Comments({ page }: { page: string }) {
           const body = await res.json().catch(() => null);
           if (controller.signal.aborted) return;
           setNotice(body?.error || "");
+          // 线上页面只对访客说一句人话，具体原因留在 console 供站主排查
+          console.warn(
+            `[comments] 接口不可用（HTTP ${res.status}）：${body?.error || "无详细信息"}`,
+          );
+
+          /*
+           * 是否本机开发，只在这条分支里判断。
+           *
+           * 不能在渲染期读 window.location —— 服务端渲染时没有 window，
+           * 客户端首次渲染却读得到，两边结果不同就会 hydration 不一致。
+           * 而 unavailable 这个状态只在客户端 fetch 之后才可能出现，
+           * 在这里判断天然安全。
+           */
+          setIsLocal(
+            /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname),
+          );
           setStatus("unavailable");
           return;
         }
@@ -163,7 +181,11 @@ export function Comments({ page }: { page: string }) {
             )}
           </h2>
         </div>
-        <p className="text-xs text-muted">无需登录，昵称可留空</p>
+        {/* 这句是在承诺「可以留言」，服务不可用时不该出现——
+            否则访客会去找一个根本不存在的输入框 */}
+        {status === "ready" && (
+          <p className="text-xs text-muted">无需登录，昵称可留空</p>
+        )}
       </div>
 
       {/* 表单：只有服务可用时才呈现，避免本地开发看到一个必然失败的输入框 */}
@@ -223,15 +245,28 @@ export function Comments({ page }: { page: string }) {
         <p className="mt-6 text-sm text-muted">正在加载留言…</p>
       )}
 
-      {status === "unavailable" && (
-        <p className="mt-6 text-sm text-muted">
-          {notice || "评论服务尚未配置。"}
-          <span className="mt-1 block text-xs">
-            本地预览请用 <code className="rounded bg-surface px-1">npx wrangler pages dev out</code>
-            ，直接 <code className="rounded bg-surface px-1">pnpm dev</code> 不会启动接口。
-          </span>
-        </p>
-      )}
+      {/*
+        服务不可用时分两种口吻：
+        - 本机开发：给出具体原因和启动命令，否则浪费时间猜
+        - 线上：只对访客说一句人话。后端的报错（缺 D1 绑定之类）是给站主看的，
+          直接晾在页面上访客只会困惑，所以写进 console 供排查。
+      */}
+      {status === "unavailable" &&
+        (isLocal ? (
+          <p className="mt-6 text-sm text-muted">
+            {notice || "评论服务尚未配置。"}
+            <span className="mt-1 block text-xs">
+              本地预览请用{" "}
+              <code className="rounded bg-surface px-1">
+                npx wrangler pages dev out
+              </code>
+              ，直接 <code className="rounded bg-surface px-1">pnpm dev</code>{" "}
+              不会启动接口。
+            </span>
+          </p>
+        ) : (
+          <p className="mt-6 text-sm text-muted">留言功能暂时不可用，稍后再来看看。</p>
+        ))}
 
       {status === "error" && (
         <div className="mt-6">
