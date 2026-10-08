@@ -174,11 +174,13 @@ if (z) {
 /* -------------------------------------------------------------- 动画 --- */
 section('10. 动画行为');
 const a = report.__animations__ || {};
-if (typeof a.frameTicks === 'number' && a.frameTicks < 8) {
-  /* 窗口被遮住时浏览器几乎不出帧，这一节的「没变化」全是假的 */
-  console.log(`   ! 只测到 ${a.frameTicks} 帧/300ms：窗口不在前台，本节数据不可信，请让浏览器窗口可见后重跑`);
+/* 窗口被遮住时浏览器几乎不出帧，这一节的「没变化」全是假的。
+   此时把 ✗ 降级成 ·，避免和上面的提示自相矛盾。 */
+const FRAMES_OK = !(typeof a.frameTicks === 'number' && a.frameTicks < 8);
+const mark = (ok) => (ok ? '✓' : FRAMES_OK ? '✗' : '·');
+if (!FRAMES_OK) {
+  console.log(`   ! 只测到 ${a.frameTicks} 帧/300ms：窗口不在前台，本节结论不可信（✗ 已降级为 ·），请让浏览器窗口可见后重跑`);
 }
-
 const pb = a.progressBar;
 if (pb) {
   console.log(`阅读进度条：顶部 ${pb.at0} → 50% ${pb.at50} → 底部 ${pb.at100}`);
@@ -196,7 +198,7 @@ const ch = a.cardHover;
 if (ch) {
   console.log(`卡片悬停：背景 ${ch.before.bg} → ${ch.after.bg}`);
   console.log(`         标题色 ${ch.before.color} → ${ch.after.color}`);
-  console.log(`   ${ch.bgChanged ? '✓' : '✗'} 背景变化   ${ch.colorChanged ? '✓' : '✗'} 标题变色`);
+  console.log(`   ${mark(ch.bgChanged)} 背景变化   ${mark(ch.colorChanged)} 标题变色`);
 }
 
 const tr = a.transitions;
@@ -219,7 +221,7 @@ if (mt) {
   console.log(
     `           点击后 expanded=${mt.afterOpen.expanded} 面板高=${mt.afterOpen.panelHeight}px`,
   );
-  console.log(`   ${mt.expands ? '✓ 点击可展开' : '✗ 点击未展开'}`);
+  console.log(`   ${mark(mt.expands)} 点击可展开`);
 }
 
 section('11. 控制台错误');
