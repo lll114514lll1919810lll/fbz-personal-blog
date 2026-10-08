@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { TocItem } from "@/lib/posts";
+import { scrollIntoViewIfNeeded, scrollToAnchor } from "@/lib/scroll";
 import { useActiveHeading } from "./use-active-heading";
 
 /**
@@ -80,6 +81,36 @@ function Sidebar({ items }: { items: TocItem[] }) {
     (n) => n.id === activeId || n.children.some((c) => c.id === activeId),
   );
 
+  // 侧栏自身也可能超长（展开多个分组后），需要能被滚动到可视区
+  const navRef = useRef<HTMLElement>(null);
+
+  // 展开的分组也跟着高亮项走：展开后如果条目在侧栏可视区外，
+  // 读者看不到自己刚展开了什么
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || !activeId) return;
+    const activeEl = nav.querySelector<HTMLElement>(
+      `a[aria-current="location"]`,
+    );
+    if (activeEl) scrollIntoViewIfNeeded(activeEl, nav);
+  }, [activeId, expanded]);
+
+  /**
+   * 点击目录项：拦截原生锚点跳转，改用缓动滚动。
+   *
+   * 原生跳转是瞬间到位的长距离传送，眼睛跟不上；缓动滚动能让读者
+   * 看清自己从哪跳到哪。用 replaceState 更新地址栏：
+   * 既让地址栏保持可分享，又不让后退键多按一次。
+   */
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    // 保留 Cmd/Ctrl+点击等原生行为（新标签页打开）
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+
+    e.preventDefault();
+    scrollToAnchor(id);
+    window.history.replaceState(null, "", `#${encodeURIComponent(id)}`);
+  };
+
   const toggle = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -97,6 +128,7 @@ function Sidebar({ items }: { items: TocItem[] }) {
 
   return (
     <nav
+      ref={navRef}
       aria-label="本文目录"
       className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto pl-1"
     >
@@ -115,8 +147,9 @@ function Sidebar({ items }: { items: TocItem[] }) {
               <div className="group flex items-start">
                 <a
                   href={`#${node.id}`}
+                  onClick={(e) => handleClick(e, node.id)}
                   aria-current={active ? "location" : undefined}
-                  className={`relative flex-1 rounded py-1.5 pl-4 pr-1 text-[13px] leading-snug break-words transition-colors ${
+                  className={`toc-link relative flex-1 rounded py-1.5 pl-4 pr-1 text-[13px] leading-snug break-words ${
                     active
                       ? "font-medium text-accent"
                       : "text-secondary hover:text-foreground"
@@ -163,16 +196,43 @@ function Sidebar({ items }: { items: TocItem[] }) {
                 )}
               </div>
 
-              {hasChildren && open && (
-                <ul className="space-y-0.5">
+              {/*
+                子项列表始终挂载，用 grid-template-rows 的 0fr→1fr 过渡高度。
+                如果用 {open && ...} 直接卸载 DOM，就没有高度动画可言。
+              */}
+              <div
+                className={`toc-sublist grid transition-[grid-template-rows,opacity] duration-250 ease-out ${
+                  open && hasChildren ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                }`}
+              >
+                <ul className="overflow-hidden space-y-0.5">
                   {node.children.map((child) => (
-                    <li key={child.id} className="group relative">
+                    <li
+                      key={child.id}
+                      className={`group relative transition-[opacity,transform] duration-200 ease-out ${
+                        open && hasChildren
+                          ? "translate-x-0 opacity-100"
+                          : "-translate-x-1 opacity-0"
+                      }`}
+                      // 错峰入场：每个子项依次延迟 25ms，整组最多约 200ms 就展开完，
+                      // 既有依次浮现的层次感，又不会拖沓
+                      style={
+                        open && hasChildren
+                          ? {
+                              transitionDelay: `${
+                                60 + node.children.indexOf(child) * 25
+                              }ms`,
+                            }
+                          : undefined
+                      }
+                    >
                       <a
                         href={`#${child.id}`}
+                        onClick={(e) => handleClick(e, child.id)}
                         aria-current={
                           activeId === child.id ? "location" : undefined
                         }
-                        className={`relative block rounded py-1.5 pl-7 pr-1 text-[13px] leading-snug break-words transition-colors ${
+                        className={`toc-link relative block rounded py-1.5 pl-7 pr-1 text-[13px] leading-snug break-words ${
                           activeId === child.id
                             ? "font-medium text-accent"
                             : "text-secondary hover:text-foreground"
@@ -193,7 +253,7 @@ function Sidebar({ items }: { items: TocItem[] }) {
                     </li>
                   ))}
                 </ul>
-              )}
+              </div>
             </li>
           );
         })}
@@ -256,9 +316,16 @@ function Collapsible({ items }: { items: TocItem[] }) {
         </span>
       </button>
 
-      {open && (
-        <ul className="mt-2 space-y-0.5 rounded-lg border border-border bg-surface p-3">
-          {tree.map((node) => {
+      {/* 同样用 grid-rows 0fr→1fr 做高度过渡，保持挂载才有动画 */}
+      <div
+        className={`grid transition-[grid-template-rows,opacity] duration-250 ease-out ${
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <ul className="overflow-hidden">
+          <li className="rounded-lg border border-border bg-surface p-3">
+            <ul className="space-y-0.5">
+              {tree.map((node) => {
             const hasChildren = node.children.length > 0;
             const groupOpen =
               expanded.has(node.id) ||
@@ -270,7 +337,17 @@ function Collapsible({ items }: { items: TocItem[] }) {
                 <div className="flex items-start">
                   <a
                     href={`#${node.id}`}
-                    onClick={() => setOpen(false)}
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+                      e.preventDefault();
+                      scrollToAnchor(node.id);
+                      setOpen(false);
+                      window.history.replaceState(
+                        null,
+                        "",
+                        `#${encodeURIComponent(node.id)}`,
+                      );
+                    }}
                     className={`flex-1 py-1.5 text-sm transition-colors ${
                       activeId === node.id
                         ? "font-medium text-accent"
@@ -314,7 +391,17 @@ function Collapsible({ items }: { items: TocItem[] }) {
                       <li key={child.id}>
                         <a
                           href={`#${child.id}`}
-                          onClick={() => setOpen(false)}
+                          onClick={(e) => {
+                            if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+                            e.preventDefault();
+                            scrollToAnchor(child.id);
+                            setOpen(false);
+                            window.history.replaceState(
+                              null,
+                              "",
+                              `#${encodeURIComponent(child.id)}`,
+                            );
+                          }}
                           className={`block py-1.5 pl-5 text-sm transition-colors ${
                             activeId === child.id
                               ? "font-medium text-accent"
@@ -330,8 +417,10 @@ function Collapsible({ items }: { items: TocItem[] }) {
               </li>
             );
           })}
+            </ul>
+          </li>
         </ul>
-      )}
+      </div>
     </>
   );
 }
