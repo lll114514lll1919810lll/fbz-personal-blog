@@ -322,8 +322,30 @@ const CHECKS = {
 async function auditAnimations(send) {
   const out = {};
 
-  // 1. 阅读进度条：滚动到不同位置，scaleX 应单调变化
+  /*
+     出帧心跳：窗口被遮住时浏览器基本不出帧，于是滚动驱动的效果
+     （进度条、目录高亮）、悬停、点击展开全部量不到变化，
+     会得到一连串假失败。这里先量 300ms 内有多少帧，
+     低于阈值就让报告把这节标成「数据不可信」，而不是当成代码问题。
+   */
   await goto(send, `${BASE}/blog/nextjs-16-breaking-changes`, 1280, 900);
+  out.frameTicks = await evaluate(
+    send,
+    `
+    return new Promise((resolve) => {
+      let n = 0;
+      const t0 = performance.now();
+      const tick = () => {
+        n++;
+        if (performance.now() - t0 < 300) requestAnimationFrame(tick);
+        else resolve(n);
+      };
+      requestAnimationFrame(tick);
+    });
+  `,
+  );
+
+  // 1. 阅读进度条：滚动到不同位置，scaleX 应单调变化
   const progressAt = async (ratio) => {
     await evaluate(send, `
       const max = document.documentElement.scrollHeight - window.innerHeight;

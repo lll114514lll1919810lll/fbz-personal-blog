@@ -174,6 +174,10 @@ if (z) {
 /* -------------------------------------------------------------- 动画 --- */
 section('10. 动画行为');
 const a = report.__animations__ || {};
+if (typeof a.frameTicks === 'number' && a.frameTicks < 8) {
+  /* 窗口被遮住时浏览器几乎不出帧，这一节的「没变化」全是假的 */
+  console.log(`   ! 只测到 ${a.frameTicks} 帧/300ms：窗口不在前台，本节数据不可信，请让浏览器窗口可见后重跑`);
+}
 
 const pb = a.progressBar;
 if (pb) {
