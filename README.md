@@ -33,13 +33,22 @@ src/
 ├── content/                ← 文章正文都放这里
 │   ├── hello-world.mdx
 │   ├── nextjs-16-breaking-changes.mdx
-│   └── how-to-write-with-mdx.mdx
+│   ├── how-to-write-with-mdx.mdx
+│   └── code-blocks-guide.mdx
 ├── components/
 │   ├── site-chrome.tsx     页头 / 页脚
-│   └── post-card.tsx       文章列表里的一张卡片
+│   ├── post-card.tsx       文章列表卡片（悬停微交互）
+│   ├── post-body.tsx       文章主体 + 宽度调节条
+│   ├── post-navigation.tsx 上一篇 / 下一篇
+│   ├── table-of-contents.tsx 文章目录（侧栏 / 折叠两种形态）
+│   ├── use-active-heading.ts 目录滚动高亮的 hook
+│   ├── tag-filter-bar.tsx  标签筛选栏
+│   ├── code-block.tsx      代码块交互（复制 / 语言标签 / 渐变）
+│   └── reading-progress.tsx 顶部阅读进度条
 ├── lib/
 │   ├── posts.ts            读取 content/ 的工具函数
-│   ├── site.ts             站名、简介、导航配置 ← 改站点信息看这里
+│   ├── site.ts             站名、导航、CONTENT_MAX_WIDTH ← 改站点信息看这里
+│   ├── reading-width.ts    正文宽度档位 + localStorage 持久化
 │   └── date.ts             日期格式化
 └── mdx-components.tsx      全局 MDX 组件映射
 ```
@@ -92,6 +101,7 @@ export const metadata = {
 | 阅读进度条 | `reading-progress.tsx` | 顶部 1.5px 细线，用 `rAF` 节流避免滚动掉帧 |
 | 悬停微交互 | `post-card.tsx` | 列表项悬停时泛底色、横线延展、摘要和标签淡入 |
 | 正文宽度调节 | `post-body.tsx` | 文章页可切换窄/标准/宽三档，选择记在 localStorage |
+| 标签筛选 | `tag-filter-bar.tsx` | 列表页和标签页共用的筛选栏，点击跳独立地址可分享 |
 | 代码高亮 | `next.config.ts` + Shiki | 构建期高亮，明暗双主题跟随系统，零客户端 JS |
 | 代码块交互 | `code-block.tsx` | 复制按钮、语言标签、横向滚动渐变提示 |
 

@@ -18,20 +18,30 @@ export default function TagsPage() {
       </header>
 
       {tags.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {tags.map(({ tag, count }) => (
-            <Link
-              key={tag}
-              href={`/tags/${encodeURIComponent(tag)}`}
-              className="group flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-sm transition-colors hover:border-accent hover:bg-accent-soft"
-            >
-              {tag}
-              <span className="text-xs tabular-nums text-muted transition-colors group-hover:text-accent">
-                {count}
-              </span>
-            </Link>
-          ))}
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2">
+            {tags.map(({ tag, count }) => (
+              <Link
+                key={tag}
+                href={`/tags/${encodeURIComponent(tag)}`}
+                className="group flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-sm transition-colors hover:border-accent hover:bg-accent-soft"
+              >
+                {tag}
+                <span className="text-xs tabular-nums text-muted transition-colors group-hover:text-accent">
+                  {count}
+                </span>
+              </Link>
+            ))}
+          </div>
+
+          <p className="text-[13px] text-muted">
+            也可以在{" "}
+            <Link href="/blog" className="text-accent hover:opacity-70">
+              文章列表页
+            </Link>{" "}
+            顶部直接筛选。
+          </p>
+        </>
       ) : (
         <p className="text-sm text-muted">还没有任何标签。</p>
       )}
