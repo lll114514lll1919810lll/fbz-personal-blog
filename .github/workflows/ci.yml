@@ -93,14 +93,31 @@ jobs:
           # 后者需要在每个静态托管端单独配 rewrite，加国内 CDN 镜像时会踩坑。
           [ -f out/blog/index.html ] \
             || fail "文章列表不是目录形式，trailingSlash 可能失效"
-          ls out/blog/*/index.html >/dev/null 2>&1 \
-            || fail "文章详情页不是目录形式（应为 out/blog/<slug>/index.html）"
-          ok "文章页为目录形式（trailingSlash 生效）"
+          post_count=0
+          for d in out/blog/*/; do
+            [ -d "$d" ] || continue
+            case "$d" in */__next*) continue ;; esac
+            [ -f "$d/index.html" ] \
+              || fail "文章页缺少 index.html（trailingSlash 可能失效）：$d"
+            post_count=$((post_count + 1))
+          done
+          [ "$post_count" -gt 0 ] || fail "没有生成任何文章详情页"
+          ok "文章页为目录形式（$post_count 篇，trailingSlash 生效）"
 
           # ---- 标签页必须生成 ----
-          ls -d out/tags/*/ >/dev/null 2>&1 \
-            || fail "没有生成任何标签详情页"
-          ok "标签页已生成 $(ls -d out/tags/*/ | wc -l) 个"
+          # 判定标准是「真的产出了 index.html」，而不是数目录个数。
+          # out/tags/ 下还有 __next.tags 这类 Next 内部 RSC 产物目录，
+          # 它不是页面；而且它在不同平台上可能是文件也可能是目录，
+          # 直接 ls -d out/tags/*/ | wc -l 会得到不稳定的数字。
+          tag_count=0
+          for d in out/tags/*/; do
+            [ -d "$d" ] || continue
+            case "$d" in */__next*) continue ;; esac
+            [ -f "$d/index.html" ] || fail "标签页缺少 index.html：$d"
+            tag_count=$((tag_count + 1))
+          done
+          [ "$tag_count" -gt 0 ] || fail "没有生成任何标签详情页"
+          ok "标签页已生成 $tag_count 个，且都有 index.html"
 
           # ---- 关键回归断言：next/image 的优化器引用 ----
           # next/image 默认会输出 /_next/image?url=... 指向服务端优化接口，
