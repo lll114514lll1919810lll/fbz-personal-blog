@@ -65,6 +65,11 @@
 
   /* 娴呰壊鍜屾繁鑹蹭富棰樹娇鐢ㄧ嫭绔嬭儗鏅祫婧愶紝渚夸簬鍚庣画鍒嗗埆鏇挎崲銆?*/
   --bg-image: none;
+  /* 没有底色的文字用的描边（text-shadow）。默认关掉：
+     纯色页面上给文字加描边只会显脏、让字发糊。
+     想加浅色背景图时，把这里和深色块一样打开即可；
+     描边色要和文字色反向（浅色文字配深色描边），否则等于没加。 */
+  --text-outline: none;
 }
 
 /* 娣辫壊浠ょ墝锛堢涓€浠斤級锛氳窡闅忕郴缁熴€?
@@ -90,6 +95,15 @@
     --panel-highlight: rgb(255 255 255 / 0.06);
     --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
     --bg-image: url("/background-dark.png");
+    /* 背景图一开，没有底色的文字就必须描边：图里任何位置都可能是亮的，
+       浅色文字压上去会直接消失（实测最差 1.02:1）。
+       刻意做得很细：四向 0.5px 亚像素偏移 + 2px 柔光。
+       1px 硬描边在小字上太粗——小标只有 10.88px，1px 相当于字高的 9%，
+       看着像给字套了圈铁环；0.5px 会自然渲染成一条极细的软边。 */
+    --text-outline:
+      0.5px 0 rgb(0 0 0 / 0.5), -0.5px 0 rgb(0 0 0 / 0.5),
+      0 0.5px rgb(0 0 0 / 0.5), 0 -0.5px rgb(0 0 0 / 0.5),
+      0 0 2px rgb(0 0 0 / 0.4);
   }
 }
 
@@ -113,6 +127,11 @@
   --panel-highlight: rgb(255 255 255 / 0.06);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
   --bg-image: url("/background-dark.png");
+  /* 与上面媒体查询块里那份逐字一致，改一处必须改两处 */
+  --text-outline:
+    0.5px 0 rgb(0 0 0 / 0.5), -0.5px 0 rgb(0 0 0 / 0.5),
+    0 0.5px rgb(0 0 0 / 0.5), 0 -0.5px rgb(0 0 0 / 0.5),
+    0 0 2px rgb(0 0 0 / 0.4);
 }
 
 @theme inline {
@@ -477,6 +496,23 @@
     background-color: var(--panel-bg-raised);
   }
 
+  /**
+   * 自带底色的容器：关掉从 body 继承来的文字描边。
+   *
+   * 描边只对「直接压在背景图上」的文字有意义——那里的底是照片，
+   * 亮暗不可控（实测最差 1.02:1）。一旦文字下面已经有自己的实底
+   * （面板、按钮、标签、代码块），描边就是纯负担：
+   * 字会发糊、边缘发脏，而且对比度本来就已经达标。
+   */
+  .panel,
+  .button-primary,
+  .button-quiet,
+  .tag-chip,
+  .cover-art,
+  .code-block {
+    text-shadow: none;
+  }
+
   /* ==========================================================================
      绔欑偣鏍囪瘑锛堥《鏍忓乏涓婅锛?
 
@@ -656,6 +692,10 @@ body {
   background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--foreground);
+  /* text-shadow 是可继承属性，挂在这里等于「默认所有文字都有描边」；
+     自带底色的容器（.panel 等）在 components 层里统一关掉，
+     于是结果就是「没有背景的文字才有描边」。 */
+  text-shadow: var(--text-outline);
   -webkit-font-smoothing: antialiased;
 }
 
