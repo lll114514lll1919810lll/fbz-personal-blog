@@ -41,7 +41,8 @@
   --surface: #fafafa; /* 面板内部的浅底：行内代码、表头 */
   --foreground: #171717;
   --secondary: #52525b; /* 次级文字：摘要、元信息  7.73:1 */
-  --muted: #71717a; /* 装饰与占位               4.83:1 */
+  --muted: #63636d; /* 装饰与占位   6.0:1（压深过：原 #71717a 在纯白上只有 4.6:1，
+                       现在面板压在背景图上会带底色，完全不够余量） */
   --border: #e4e4e7;
   --accent: #2563eb; /* 全站唯一强调色 */
   --accent-soft: #eff6ff;
@@ -64,12 +65,23 @@
   --radius-panel: 14px;
 
   /* 浅色和深色主题使用独立背景资源，便于后续分别替换 */
-  --bg-image: none;
+  --bg-image: url("/background-light.png");
+  /* 背景薄纱：亮色图是中间调（中位亮度 0.427），深色文字直接压上去会糊，
+     盖一层 50% 白把图压成纹理，文字才稳。与图同为 fixed，一起滚动。
+     深色主题不需要（那边图本身够暗，实测文字对比度已达标）。 */
+  --bg-scrim: linear-gradient(rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.5));
   /* 没有底色的文字用的描边（text-shadow）。默认关掉：
      纯色页面上给文字加描边只会显脏、让字发糊。
      想加浅色背景图时，把这里和深色块一样打开即可；
      描边色要和文字色反向（浅色文字配深色描边），否则等于没加。 */
-  --text-outline: none;
+  --text-outline:
+    0.5px 0 rgb(255 255 255 / 0.72), -0.5px 0 rgb(255 255 255 / 0.72),
+    0 0.5px rgb(255 255 255 / 0.72), 0 -0.5px rgb(255 255 255 / 0.72),
+    0 0 2px rgb(255 255 255 / 0.5);
+  /* 小标（.eyebrow）的颜色单独给一个令牌，因为它常常直接压在背景图上。
+     --muted 在纯白上也只有 6.0:1，遇到中间调的图就跌破 4.5:1
+     （亮色图上实测最差 2.25:1），所以亮色主题直接用主文字色。 */
+  --eyebrow-color: var(--foreground);
 }
 
 /* 深色令牌（第一份）：跟随系统。
@@ -95,6 +107,8 @@
     --panel-highlight: rgb(255 255 255 / 0.06);
     --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
     --bg-image: url("/background-dark.png");
+  --bg-scrim: none;
+    --bg-scrim: none;
     /* 背景图一开，没有底色的文字就必须描边：图里任何位置都可能是亮的，
        浅色文字压上去会直接消失（实测最差 1.02:1）。
        刻意做得很细：四向 0.5px 亚像素偏移 + 2px 柔光。
@@ -104,6 +118,8 @@
       0.5px 0 rgb(0 0 0 / 0.5), -0.5px 0 rgb(0 0 0 / 0.5),
       0 0.5px rgb(0 0 0 / 0.5), 0 -0.5px rgb(0 0 0 / 0.5),
       0 0 2px rgb(0 0 0 / 0.4);
+    /* 深色图上 --muted 实测只有 4.35:1，提到次级色 */
+    --eyebrow-color: var(--secondary);
   }
 }
 
@@ -127,11 +143,14 @@
   --panel-highlight: rgb(255 255 255 / 0.06);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
   --bg-image: url("/background-dark.png");
+  --bg-scrim: none;
   /* 与上面媒体查询块里那份逐字一致，改一处必须改两处 */
   --text-outline:
     0.5px 0 rgb(0 0 0 / 0.5), -0.5px 0 rgb(0 0 0 / 0.5),
     0 0.5px rgb(0 0 0 / 0.5), 0 -0.5px rgb(0 0 0 / 0.5),
     0 0 2px rgb(0 0 0 / 0.4);
+  /* 深色图上 --muted 实测只有 4.35:1，提到次级色 */
+  --eyebrow-color: var(--secondary);
 }
 
 @theme inline {
@@ -338,7 +357,7 @@
   }
 
   .eyebrow {
-    color: var(--muted);
+    color: var(--eyebrow-color);
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.16em;
@@ -692,7 +711,8 @@ body {
   /* 背景色在最底层，图片盖在它上面（图片没加载出来时也好看）。
      面板是半透明的，图片就从面板下面透出来。 */
   background-color: var(--background);
-  background-image: var(--bg-image);
+  /* 第一层是薄纱（可能为 none），第二层才是图 */
+  background-image: var(--bg-scrim), var(--bg-image);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
