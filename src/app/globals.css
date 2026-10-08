@@ -1649,3 +1649,80 @@ html {
   border-radius: 3px;
   padding: 0 2px;
 }
+
+/* ============================================================================
+   评论
+
+   全站唯一的动态区域：数据来自 /api/comments（Pages Functions + D1）。
+   输入控件沿用面板的视觉语言——半透明底、细边框、圆角，
+   平时不用强调色，聚焦时才点亮，和其余交互元素一致。
+   ========================================================================= */
+
+.comment-input {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--panel-bg-raised);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.comment-input::placeholder {
+  color: var(--muted);
+}
+
+.comment-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+/*
+ * 自定义 focus 样式不能顺手把键盘焦点框也抹掉。
+ * 上面 :focus 只改了边框颜色（对比度不足以当作唯一焦点提示），
+ * 这里用 :focus-visible 给键盘用户补一条明确的轮廓——
+ * 鼠标点击不会触发它，不会显得多余。
+ */
+.comment-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.comment-submit {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  /* 44px 触控热区，和顶栏的主题开关、logo 保持一致 */
+  min-height: 2.75rem;
+  padding: 0 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-bg-raised);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.875rem;
+  transition: border-color 180ms ease, color 180ms ease;
+}
+
+/* 只在真正支持悬停的设备上做悬停反馈：
+   触屏上 :hover 会在点击后粘住，看起来像按钮卡住了 */
+@media (hover: hover) {
+  .comment-submit:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    color: var(--accent);
+  }
+}
+
+.comment-submit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.comment-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

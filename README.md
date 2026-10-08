@@ -492,3 +492,111 @@ DNS 用子域名接入，阿里云 DNS 保持不动，加一条 CNAME 指向
 Cloudflare 免费版**没有中国大陆节点**，绑定自有域名只是降低被干扰概率，
 不等于加速——境内访问仍会绕到香港/日本节点。要真正解决必须境内服务器
 加 ICP 备案，免费方案做不到这一点。
+
+---
+
+## 评论
+
+文章底部的留言区是**全站唯一的动态部分**。页面本身仍是静态导出的 HTML，
+评论在浏览器里向 `/api/comments` 取。
+
+### 为什么静态站也能有后端
+
+Cloudflare Pages 允许在仓库根目录放一个 `functions/` 目录，它会被单独
+部署成 Worker。关键点是**它与构建产物目录是两回事**——官方文档明确要求
+`functions/` 放在项目根目录，**不能放进静态产物目录**（如 `out/`）：
+
+> Make sure that the `/functions` directory is at the root of your Pages
+> project (and not in the static root, such as `/dist`).
+
+所以 `output: "export"` 照旧，Next.js 自己的服务端能力（Route Handler、
+cookies、Server Actions）依然不可用，但 `functions/` 这一层不受影响。
+
+```
+functions/_lib/api.js       共用模块：CORS、限流、校验、IP 哈希
+functions/api/comments.js   评论接口
+db/schema.sql               D1 建表语句
+wrangler.toml               Pages 配置与 D1 绑定
+```
+
+数据存在 **Cloudflare D1**（边缘 SQLite）。免费额度为每天 500 万行读、
+10 万行写、5 GB 存储，且无出网费——个人博客用不到零头。
+
+### 接口
+
+```
+GET    /api/comments?page=<slug>              列出留言（最多 200 条）
+POST   /api/comments   { page, name, text }   发表留言
+DELETE /api/comments?id=<id>&key=<ADMIN_KEY>  管理员删除
+```
+
+### 设计取舍
+
+- **不做登录。** 匿名 + 昵称 + 限流足够，引入账号体系会让大多数想留言的人放弃。
+  昵称可留空，记作「路人」。
+- **不存 IP。** 只存加盐 SHA-256 哈希，仅用于限流；数据库里不留访客真实 IP。
+- **限流**：同一 IP 10 分钟内最多 3 条。
+- **管理**：删除需要 `ADMIN_KEY`，前端不持有。密钥比较用逐字节异或累加而非
+  `===`，避免通过响应时间差逐位猜出密钥。
+- **D1 绑定的默认状态是注释掉的**：`database_id` 必须是真实存在的数据库，
+  否则部署会失败。建库之后再启用。
+
+### 启用步骤
+
+**1. 创建 D1 数据库**
+
+```bash
+npx wrangler login
+npx wrangler d1 create fbz-blog-comments
+```
+
+把输出的 `database_id` 填进 `wrangler.toml`，并取消 `[[d1_databases]]` 一段的注释。
+
+**2. 建表**
+
+```bash
+npx wrangler d1 execute fbz-blog-comments --remote --file=db/schema.sql
+```
+
+**3. 配置环境变量**
+
+Cloudflare 后台 → Pages 项目 → 设置 → 变量与机密，添加两个**加密**变量：
+
+| 变量名 | 说明 |
+| --- | --- |
+| `ADMIN_KEY` | 管理员删除留言用的密钥，自己随便设一串长的 |
+| `IP_SALT` | 给 IP 哈希加的盐，随便设一串长的 |
+
+**4. 推送**
+
+`wrangler.toml` 里的绑定生效后，重新部署即会挂上 D1。
+
+### 本地调试
+
+`pnpm dev` 跑的是 Next 开发服务器，**不会**启动 `functions/`，
+评论会显示「评论服务尚未配置」。要连后端一起调：
+
+```bash
+# 1. 先出一份静态产物（Windows PowerShell 写法）
+$env:NEXT_OUTPUT="export"; pnpm build
+#   Git Bash / macOS / Linux：NEXT_OUTPUT=export pnpm build
+
+# 2. 建本地库的表（只需一次）
+npx wrangler d1 execute fbz-blog-comments --local --file=db/schema.sql
+
+# 3. 起 Pages 开发服务器（带 functions）
+pnpm preview:cf      # http://127.0.0.1:8788
+```
+
+本地密钥放在 `.dev.vars`（已在 `.gitignore` 里，不会提交）：
+
+```
+ADMIN_KEY=local-dev-admin-key
+IP_SALT=local-dev-salt
+```
+
+### 删除一条留言
+
+```bash
+curl -X DELETE "https://blog.mclll114.me/api/comments?id=<id>&key=<ADMIN_KEY>"
+```

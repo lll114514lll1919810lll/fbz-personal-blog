@@ -11,7 +11,8 @@
     "test": "tsx scripts/test-toc.ts",
     "test:theme": "node scripts/check-theme.cjs",
     "typegen": "next typegen",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "preview:cf": "npx wrangler pages dev out --port 8788"
   },
   "dependencies": {
     "@mdx-js/loader": "^3.1.1",

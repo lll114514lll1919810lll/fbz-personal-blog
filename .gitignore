@@ -42,3 +42,7 @@ next-env.d.ts
 
 # 本地截图预览（临时产物，不要提交）
 /.preview/
+
+# Cloudflare 本地开发密钥（含 ADMIN_KEY，绝不能提交）
+.dev.vars
+.wrangler/

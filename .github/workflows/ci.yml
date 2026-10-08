@@ -64,6 +64,19 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # functions/ 是 Cloudflare Pages Functions，不进 Next 构建，
+      # 所以 typecheck 和 lint 都覆盖不到它——语法错误只会在部署时炸。
+      # node --check 只做语法解析，毫秒级，不引入任何依赖。
+      - name: Functions 语法检查
+        run: |
+          set -e
+          count=0
+          for f in $(find functions -name '*.js'); do
+            node --check "$f"
+            count=$((count + 1))
+          done
+          echo "已检查 $count 个 Functions 文件"
+
       # 必须带 NEXT_OUTPUT=export，否则测的是本地构建路径，
       # 而不是真实上线的那条路径——那 CI 就失去意义了
       - name: 静态导出构建

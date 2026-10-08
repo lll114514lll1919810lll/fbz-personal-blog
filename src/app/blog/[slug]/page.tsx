@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Comments } from "@/components/comments";
 import { PostBody } from "@/components/post-body";
 import { PostNavigation } from "@/components/post-navigation";
 import { getAllPosts, getPostBySlug, getTableOfContents } from "@/lib/posts";
@@ -108,10 +109,16 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
         </header>
       }
       footer={
-        <PostNavigation
-          previous={allPosts[index + 1]}
-          next={allPosts[index - 1]}
-        />
+        <>
+          <PostNavigation
+            previous={allPosts[index + 1]}
+            next={allPosts[index - 1]}
+          />
+          {/* 评论是本页唯一的动态内容：页面本身仍是静态预渲染的 HTML，
+              评论在浏览器里向 /api/comments 取（见 functions/api/comments.js）。
+              用 slug 作为 page 标识，后端按它分区存储。 */}
+          <Comments page={slug} />
+        </>
       }
     >
       <Content />
