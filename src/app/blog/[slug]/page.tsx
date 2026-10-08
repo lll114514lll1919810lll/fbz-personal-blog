@@ -56,16 +56,19 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
       toc={toc}
       header={
         <header className="flex flex-col gap-4 pb-6">
-          <div className="-my-2 flex items-center gap-2.5 py-2 text-[13px] text-muted">
-            <Link
-              href="/blog"
-              className="inline-flex items-center py-2 transition-colors hover:text-secondary"
-            >
-              文章
-            </Link>
-            <span aria-hidden>/</span>
-            <span className="truncate">{post.tags?.[0] ?? "未分类"}</span>
-          </div>
+          {/*
+            这里原本是一条面包屑「文章 / 第一个标签」。
+            那个「分类」其实是 tags[0]，纯粹取决于标签书写顺序，
+            不是真的分类体系；而且它是纯 span 不可点，看着像坏链接。
+            本站没有分类，所以不要假装有——只留返回入口。
+          */}
+          <Link
+            href="/blog"
+            className="-my-2 inline-flex items-center gap-1 py-2 text-[13px] text-muted transition-colors hover:text-secondary"
+          >
+            <span aria-hidden>←</span>
+            文章
+          </Link>
 
           <h1 className="text-3xl font-bold leading-tight tracking-tight">
             {post.title}
