@@ -23,6 +23,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function ArticleImages() {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+  /* 按下时是否落在遮罩上：区分「点遮罩关闭」与「选中图注、拖到框外松手」 */
+  const pressedBackdrop = useRef(false);
   const [current, setCurrent] = useState<{
     src: string;
     alt: string;
@@ -132,9 +134,17 @@ export function ArticleImages() {
       ref={dialogRef}
       className="image-lightbox"
       aria-label="图片预览"
-      /* 点遮罩关闭：遮罩属于 dialog 自身，所以 target 等于 dialog 就是点了外面 */
-      onClick={(event) => {
-        if (event.target === dialogRef.current) close();
+      /*
+        关闭判定不能用 click：click 发生在 mousedown 和 mouseup 的共同祖先上，
+        在弹层里按下、拖到外面松手也会产生一个 target 是 dialog 的 click。
+        要求按下和松开都落在遮罩上才关闭。
+      */
+      onPointerDown={(event) => {
+        pressedBackdrop.current = event.target === dialogRef.current;
+      }}
+      onPointerUp={(event) => {
+        if (pressedBackdrop.current && event.target === dialogRef.current) close();
+        pressedBackdrop.current = false;
       }}
     >
       {current && (
