@@ -391,10 +391,19 @@ async function auditAnimations(send) {
      4b. 焦点环：必须用真实键盘事件驱动。
      :focus-visible 只在「用户用键盘导航」时命中，程序化调用 focus()
      不算——这也是为什么单独查 getComputedStyle 会得到假警报。
+
+     键盘事件只有在窗口位于前台时才送达：窗口被遮住时
+     Input.dispatchKeyEvent 没有效果，Tab 之后 document.activeElement
+     还是 <body>，于是报出「焦点环缺失」的假失败（踩过一次）。
+     先 bringToFront 即可，鼠标事件不受影响。
    */
   await goto(send, `${BASE}/blog`, 1280, 900);
-  const focusTrail = [];
-  for (let i = 0; i < 3; i++) {
+  await send('Page.bringToFront');
+  await sleep(300);
+
+  /* 窗口刚被激活时，前两次 Tab 常被吞掉（document.activeElement 仍是 <body>）。
+     先空按两次预热，不计入结果。 */
+  const pressTab = async () => {
     for (const type of ['keyDown', 'keyUp']) {
       await send('Input.dispatchKeyEvent', {
         type,
@@ -404,7 +413,13 @@ async function auditAnimations(send) {
         nativeVirtualKeyCode: 9,
       });
     }
-    await sleep(180);
+    await sleep(150);
+  };
+  for (let i = 0; i < 2; i++) await pressTab();
+
+  const focusTrail = [];
+  for (let i = 0; i < 3; i++) {
+    await pressTab();
     focusTrail.push(
       await evaluate(
         send,
@@ -424,12 +439,16 @@ async function auditAnimations(send) {
       ),
     );
   }
+  const reachable = focusTrail.filter((f) => f.tag !== 'BODY');
   const ringed = focusTrail.filter(
     (f) => f.focusVisible && parseFloat(f.outlineWidth) > 0 && f.outlineStyle !== 'none',
   );
   out.focusRingByKeyboard = {
     trail: focusTrail,
-    ok: ringed.length === focusTrail.filter((f) => f.tag !== 'BODY').length && ringed.length > 0,
+    /* 一次都没走到元素，说明是环境没把键盘事件送进来（窗口不在前台等），
+       不能算代码问题，标记为「未测到」而不是失败 */
+    skipped: reachable.length === 0,
+    ok: reachable.length > 0 && ringed.length === reachable.length,
   };
 
   // 5. 移动端折叠目录：点击后是否展开

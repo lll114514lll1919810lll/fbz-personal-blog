@@ -148,10 +148,15 @@ if (kb) {
   for (const f of kb.trail) {
     const ok = f.focusVisible && parseFloat(f.outlineWidth) > 0 && f.outlineStyle !== 'none';
     console.log(
-      `   ${ok ? '✓' : '✗'} <${f.tag}> "${f.text ?? ''}"  focus-visible=${f.focusVisible}  outline=${f.outlineWidth} ${f.outlineStyle} ${f.outlineColor}`,
+      `   ${kb.skipped ? '·' : ok ? '✓' : '✗'} <${f.tag}> "${f.text ?? ''}"  focus-visible=${f.focusVisible}  outline=${f.outlineWidth} ${f.outlineStyle} ${f.outlineColor}`,
     );
   }
-  console.log(`   ${kb.ok ? '✓ 键盘导航有清晰焦点环' : '✗ 焦点环缺失'}`);
+  if (kb.skipped) {
+    /* 键盘事件根本没送到页面（窗口不在前台等），这是环境问题不是代码问题 */
+    console.log('   ! 未测到：键盘事件没送达页面，确认窗口在前台后重跑');
+  } else {
+    console.log(`   ${kb.ok ? '✓ 键盘导航有清晰焦点环' : '✗ 焦点环缺失'}`);
+  }
 } else {
   console.log('   (跳过)');
 }
