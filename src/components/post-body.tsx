@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { BackToTop } from "@/components/back-to-top";
 import { TableOfContents } from "@/components/table-of-contents";
 import { READING_WIDTHS, useReadingWidth } from "@/lib/reading-width";
 import type { TocItem } from "@/lib/posts";
@@ -82,6 +83,9 @@ export function PostBody({
           <TableOfContents variant="sidebar" items={toc} />
         </div>
       </div>
+
+      {/* 长文才需要回到顶部，所以只在文章页渲染 */}
+      <BackToTop />
     </div>
   );
 }

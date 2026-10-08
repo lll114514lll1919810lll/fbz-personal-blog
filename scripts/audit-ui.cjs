@@ -206,8 +206,17 @@ const CHECKS = {
   siblingOverlap: `
     const issues = [];
     const groups = ['main > div > *', '.prose > *'];
+    /*
+       跳过脱离文档流的元素（fixed / absolute）。
+       它们本来就要浮在内容之上——比如右下角的「回到顶部」按钮，
+       与正文重叠正是它的用途，报成问题只会掩盖真正的布局错误。
+     */
+    const inFlow = (el) => {
+      const pos = getComputedStyle(el).position;
+      return pos !== 'fixed' && pos !== 'absolute';
+    };
     for (const g of groups) {
-      const els = [...document.querySelectorAll(g)];
+      const els = [...document.querySelectorAll(g)].filter(inFlow);
       for (let i = 0; i < els.length - 1; i++) {
         const a = els[i].getBoundingClientRect();
         const b = els[i + 1].getBoundingClientRect();

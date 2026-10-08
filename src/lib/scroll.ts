@@ -32,6 +32,13 @@ export function prefersReducedMotion(): boolean {
  * 锁住之后高亮直接跳到目标项，中间章节不再参与。
  */
 let lockedId: string | null = null;
+/**
+ * 是否暂停高亮跟随。
+ *
+ * 和 lockedId 分开：跳转到某个锚点时两者都有值；「回到顶部」没有对应的
+ * 锚点可锁，只是把高亮冻结在原地，所以需要一个独立的开关。
+ */
+let suppressed = false;
 const lockListeners = new Set<() => void>();
 
 function notifyLock() {
@@ -44,7 +51,7 @@ export function subscribeScrollLock(callback: () => void) {
   return () => lockListeners.delete(callback);
 }
 
-/** 当前锁定的锚点；未锁定时返回 null */
+/** 高亮应当停留的锚点；为 null 表示冻结在当前位置 */
 export function getScrollLock(): string | null {
   return lockedId;
 }
@@ -54,9 +61,22 @@ export function getScrollLockServer(): string | null {
   return null;
 }
 
-/** 滚动是否处于锁定状态（高亮应暂停跟随） */
+/** 高亮是否应暂停跟随 */
 export function isScrollLocked(): boolean {
-  return lockedId !== null;
+  return suppressed;
+}
+
+function lockTo(id: string | null) {
+  lockedId = id;
+  suppressed = true;
+  notifyLock();
+  armUserScrollUnlock();
+}
+
+function unlock() {
+  lockedId = null;
+  suppressed = false;
+  notifyLock();
 }
 
 /** 是否正在执行程序化滚动（此时忽略 scroll 事件） */
@@ -76,41 +96,32 @@ function armUserScrollUnlock() {
   window.addEventListener(
     "scroll",
     () => {
-      if (!programmatic && lockedId !== null) {
-        lockedId = null;
-        notifyLock();
-      }
+      if (!programmatic && suppressed) unlock();
     },
     { passive: true },
   );
 }
 
-export function scrollToAnchor(anchorId: string): void {
-  const target = document.getElementById(anchorId);
-  if (!target) return;
-
-  // 阅读线放在视口 1/3 处，和目录高亮的判定保持一致：
-  // 滚过去后标题正好落在视线中心，不会让人觉得"滚过头了"
-  const readingLine = window.innerHeight / 3;
-  const targetTop =
-    window.scrollY + target.getBoundingClientRect().top - readingLine;
-
+/**
+ * 缓动滚动到指定位置，期间暂停高亮跟随。
+ *
+ * @param targetTop 目标 scrollY
+ * @param lockId    高亮应停留的锚点；null 表示冻结在当前位置
+ */
+function easeScrollTo(targetTop: number, lockId: string | null): void {
   const start = window.scrollY;
   const distance = targetTop - start;
 
-  // 已经到位或距离极短时直接跳，省掉一次动画
+  // 已经到位或距离极短时直接跳，省掉一次动画。
+  // 减少动态效果时同样直接跳，不做缓动。
   if (prefersReducedMotion() || Math.abs(distance) < 8) {
     window.scrollTo(0, targetTop);
-    lockedId = anchorId;
-    notifyLock();
-    armUserScrollUnlock();
+    lockTo(lockId);
     return;
   }
 
-  // 立刻锁定到目标：高亮一步到位，不经过中间章节
-  lockedId = anchorId;
-  notifyLock();
-  armUserScrollUnlock();
+  // 立刻锁定：高亮一步到位，不经过中间章节
+  lockTo(lockId);
 
   const duration = Math.min(760, Math.max(320, Math.abs(distance) * 0.45));
 
@@ -130,7 +141,7 @@ export function scrollToAnchor(anchorId: string): void {
        * 动画结束后**不**解锁。
        *
        * 解锁会让高亮立刻交还给正常跟踪逻辑，而正常逻辑按「阅读线」
-       * 判定：点击最底部那一节时（页面滚不动了）它会选中上面一节，
+       * 判定：跳到最后那一节时（页面滚不动了）它会选中上面一节，
        * 于是刚跳过去的高亮又回落一次，看起来像闪动。
        * 保持锁定，等用户真正滚动再解锁。
        */
@@ -140,6 +151,32 @@ export function scrollToAnchor(anchorId: string): void {
 
   programmatic = true;
   requestAnimationFrame(step);
+}
+
+export function scrollToAnchor(anchorId: string): void {
+  const target = document.getElementById(anchorId);
+  if (!target) return;
+
+  // 阅读线放在视口 1/3 处，和目录高亮的判定保持一致：
+  // 滚过去后标题正好落在视线中心，不会让人觉得"滚过头了"
+  const readingLine = window.innerHeight / 3;
+  const targetTop =
+    window.scrollY + target.getBoundingClientRect().top - readingLine;
+
+  easeScrollTo(targetTop, anchorId);
+}
+
+/**
+ * 回到页面顶部。
+ *
+ * 高亮锁到「第一个小节标题」：滚到顶时读者看到的就是第一节，
+ * 这样动画结束时高亮正好落在该在的位置，不会先冻结再突然跳一下。
+ */
+export function scrollToTop(): void {
+  const firstHeading = document.querySelector<HTMLElement>(
+    ".prose h2[id], .prose h3[id]",
+  );
+  easeScrollTo(0, firstHeading?.id ?? null);
 }
 
 /**
