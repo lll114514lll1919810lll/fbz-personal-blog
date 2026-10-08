@@ -10,6 +10,7 @@
     "lint": "eslint",
     "test": "tsx scripts/test-toc.ts",
     "test:theme": "node scripts/check-theme.cjs",
+    "typegen": "next typegen",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

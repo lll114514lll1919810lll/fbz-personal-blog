@@ -47,6 +47,17 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
+      # 必须先跑 typegen，否则 typecheck 必然失败。
+      #
+      # Next.js 把 PageProps / LayoutProps 这类路由类型生成到 .next/types/，
+      # 再通过 next-env.d.ts 引入。而 next-env.d.ts 在 .gitignore 里
+      # （它是自动生成物），全新克隆的仓库根本没有这个文件，
+      # tsc 会报一堆 "Cannot find name 'PageProps'"。
+      #
+      # 本地看不出来是因为跑过 pnpm dev / pnpm build，生成物还在。
+      - name: 生成路由类型
+        run: pnpm typegen
+
       - name: 类型检查
         run: pnpm typecheck
 
