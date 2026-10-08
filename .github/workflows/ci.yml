@@ -130,6 +130,23 @@ jobs:
           fi
           ok "无 /_next/image 引用（图片优化器已按要求关闭）"
 
+          # ---- 关键回归断言：表格必须被 table-scroll 包裹 ----
+          # .prose table 的 width:100% 只是期望宽度，表格不会收缩到
+          # min-content 以下；某一列内容一长就撑破正文列，在窄屏上引发
+          # 整页横向溢出，表现为顶栏和阅读进度条右侧「断开」。
+          #
+          # 这里做的是静态等价检查：产出的每个 <table> 都要有配对的
+          # table-scroll 容器。纯 grep，毫秒级，不需要跑浏览器——
+          # 它拦不住所有溢出形态（比如超长 URL），但正好覆盖已发生的这个。
+          table_total=$(grep -ro '<table' out --include="*.html" | wc -l)
+          table_wrapped=$(grep -ro '<div class="table-scroll">' out --include="*.html" | wc -l)
+          if [ "$table_total" -ne "$table_wrapped" ]; then
+            echo "::error::有 $((table_total - table_wrapped)) 个 <table> 未包裹 table-scroll，窄屏会整页横向溢出"
+            echo "检查 src/mdx-components.tsx 的 table 映射是否仍然生效"
+            exit 1
+          fi
+          ok "表格均已包裹横向滚动容器（$table_total 个）"
+
           # ---- public/ 资源要复制进产物 ----
           [ -f out/site-logo.jpg ] || fail "site-logo.jpg 未复制到产物，顶栏图标会 404"
           ok "public/ 资源已复制"
