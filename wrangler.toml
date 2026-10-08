@@ -1,17 +1,9 @@
 # Cloudflare Pages 项目配置。
 #
-# 为什么 D1 绑定默认是注释掉的：
-# 绑定里必须填一个真实存在的 database_id，否则 Cloudflare 在部署时会
-# 因为找不到数据库而让构建失败。而数据库需要你在自己的账号下创建
-# （别人无法代建），所以在建库之前保持关闭，部署就不会被打断。
+# D1 绑定指向评论数据库。绑定名必须是 DB——functions/ 里用的就是 env.DB。
 #
-# 启用步骤见 README 的「评论」一节。简言之：
-#   1. npx wrangler d1 create fbz-blog-comments
-#   2. 把命令输出的 database_id 填到下面对应位置，并取消注释
-#   3. npx wrangler d1 execute fbz-blog-comments --remote --file=db/schema.sql
-#
-# 本地开发同样依赖这段配置（wrangler pages dev 和 wrangler d1 execute
-# 都从本文件读取绑定），所以本地调试前也要先取消注释。
+# 本地开发也读这份配置（wrangler pages dev 与 wrangler d1 execute 都靠它），
+# 所以本地调试不需要额外加参数。
 
 name = "fbz-personal-blog"
 
@@ -20,7 +12,7 @@ pages_build_output_dir = "out"
 
 compatibility_date = "2026-01-01"
 
-# [[d1_databases]]
-# binding = "DB"                          # 必须叫 DB，functions/ 里用的就是 env.DB
-# database_name = "fbz-blog-comments"
-# database_id = "在这里填入 wrangler d1 create 输出的 database_id"
+[[d1_databases]]
+binding = "DB"
+database_name = "fbz-blog-comments"
+database_id = "03815f33-f151-4695-b8b7-23cd974391ca"
