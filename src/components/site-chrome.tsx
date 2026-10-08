@@ -36,7 +36,10 @@ export function SiteHeader() {
             这里 12/16px 略大一点，让开关看起来是另一组东西；
             移动端只能给到 12px，再宽会在 375px 上把顶栏挤溢出 */}
         <div className="flex items-center gap-3 sm:gap-4">
-          <nav className="-my-2 flex items-center text-[13px] sm:gap-3">
+          {/* gap-3 对所有尺寸生效。原来是 sm:gap-3，移动端四个链接挤成
+              「首页文章标签关于」连在一起。站名换成 44px 图标后，窄屏
+              腾出了位置：320px 下加完 3 个 12px 间距还剩 32px 余量 */}
+          <nav className="-my-2 flex items-center text-[13px] gap-3">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
