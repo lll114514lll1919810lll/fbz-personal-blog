@@ -98,13 +98,13 @@ function Sidebar({ items }: { items: TocItem[] }) {
   return (
     <nav
       aria-label="本文目录"
-      className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pl-6"
+      className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto pl-1"
     >
-      <p className="mb-3 text-xs font-medium tracking-wide text-muted">
+      <p className="mb-3 pl-4 text-xs font-medium tracking-wide text-muted">
         本文目录
       </p>
 
-      <ul className="space-y-0.5 border-l border-border">
+      <ul className="space-y-0.5">
         {tree.map((node) => {
           const open = isOpen(node);
           const hasChildren = node.children.length > 0;
@@ -112,16 +112,26 @@ function Sidebar({ items }: { items: TocItem[] }) {
 
           return (
             <li key={node.id || node.text}>
-              <div className="flex items-start">
+              <div className="group flex items-start">
                 <a
                   href={`#${node.id}`}
                   aria-current={active ? "location" : undefined}
-                  className={`-ml-px flex-1 border-l py-1.5 pr-1 text-[13px] leading-snug break-words transition-colors ${
+                  className={`relative flex-1 rounded py-1.5 pl-4 pr-1 text-[13px] leading-snug break-words transition-colors ${
                     active
-                      ? "border-accent font-medium text-accent"
-                      : "border-transparent text-secondary hover:text-foreground"
+                      ? "font-medium text-accent"
+                      : "text-secondary hover:text-foreground"
                   }`}
                 >
+                  {/* 指示条只挂在当前项上：短（不贯穿整棵树）且粗（2px）。
+                      绝对定位在 left-0，文字从 pl-4 开始，两者留出 14px 间距。 */}
+                  <span
+                    aria-hidden
+                    className={`absolute left-0 top-1/2 w-[2px] -translate-y-1/2 rounded-full transition-all duration-200 ${
+                      active
+                        ? "h-4 bg-accent"
+                        : "h-0 bg-transparent group-hover:h-2 group-hover:bg-border"
+                    }`}
+                  />
                   {node.text}
                 </a>
 
@@ -156,18 +166,28 @@ function Sidebar({ items }: { items: TocItem[] }) {
               {hasChildren && open && (
                 <ul className="space-y-0.5">
                   {node.children.map((child) => (
-                    <li key={child.id}>
+                    <li key={child.id} className="group relative">
                       <a
                         href={`#${child.id}`}
                         aria-current={
                           activeId === child.id ? "location" : undefined
                         }
-                        className={`-ml-px block border-l py-1.5 pl-6 pr-1 text-[13px] leading-snug break-words transition-colors ${
+                        className={`relative block rounded py-1.5 pl-7 pr-1 text-[13px] leading-snug break-words transition-colors ${
                           activeId === child.id
-                            ? "border-accent font-medium text-accent"
-                            : "border-transparent text-secondary hover:text-foreground"
+                            ? "font-medium text-accent"
+                            : "text-secondary hover:text-foreground"
                         }`}
                       >
+                        {/* 子项指示条与父级对齐在同一条基线上（left-0），
+                            靠 pl-7 的更大缩进体现层级 */}
+                        <span
+                          aria-hidden
+                          className={`absolute left-0 top-1/2 w-[2px] -translate-y-1/2 rounded-full transition-all duration-200 ${
+                            activeId === child.id
+                              ? "h-4 bg-accent"
+                              : "h-0 bg-transparent group-hover:h-2 group-hover:bg-border"
+                          }`}
+                        />
                         {child.text}
                       </a>
                     </li>

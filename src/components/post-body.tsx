@@ -68,8 +68,14 @@ export function PostBody({
           <div className="mt-12">{footer}</div>
         </article>
 
-        {/* 桌面端目录侧栏 */}
-        <div className="hidden w-64 shrink-0 xl:block">
+        {/*
+          桌面端目录侧栏。
+          self-stretch 必须显式写出来：上一行的 items-start 会让这一格
+          高度只等于目录自身（约 360px），而 position:sticky 只能在
+          它的包裹层范围内生效——滚过那段高度目录就跟着消失了。
+          拉伸到整行高度后，sticky 才有足够的行程。
+        */}
+        <div className="hidden w-64 shrink-0 xl:block xl:self-stretch">
           <TableOfContents variant="sidebar" items={toc} />
         </div>
       </div>
