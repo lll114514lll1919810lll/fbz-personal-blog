@@ -423,6 +423,50 @@ html {
 }
 
 /* ============================================================================
+   页面切换过渡（View Transitions）
+   配合 components/page-transition.tsx 使用。
+
+   动效很克制：淡入淡出+ 几像素的垂直位移，180ms。
+   顶栏/底栏不在 <ViewTransition> 里，切换时不会动。
+   ========================================================================= */
+
+/* 动画进行中 ::view-transition 遮罩会吞掉点击，
+   关掉它让点击直接落到新页面上。 */
+::view-transition {
+  pointer-events: none;
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes page-fade-out {
+  to {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+
+/* 新内容进入 */
+::view-transition-new(page) {
+  animation: page-fade-in 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* 旧内容退出 */
+::view-transition-old(page) {
+  animation: page-fade-out 140ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* 链接点击反馈：等待导航完成期间压暗，给出即时的「收到了」信号。
+   配合 components/link-pending.tsx 的 data-pending 属性。 */
+[data-pending] {
+  opacity: 0.45;
+}
+
+/* ============================================================================
    动效：尊重系统的「减少动态效果」设置
    ========================================================================= */
 
@@ -433,5 +477,15 @@ html {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* View Transitions 有独立的动画属性，要单独归零。
+     只改animation-duration 不够，浏览器还会等动画结束才切换内容。 */
+  ::view-transition,
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Post } from "@/lib/posts";
 import { formatDate } from "@/lib/date";
+import { LinkPending } from "@/components/link-pending";
 
 /**
  * 文章列表里的一项。
@@ -14,13 +15,19 @@ export function PostCard({ post }: { post: Post }) {
   return (
     <article className="group relative border-b border-border last:border-b-0">
       {/* 用绝对定位的链接铺满整行作为悬停热区，比只让文字可点更好点。
-          tabIndex={-1} 让它不进入 Tab 顺序，键盘用户走下方的真实链接。 */}
+          tabIndex={-1} 让它不进入 Tab 顺序，键盘用户走下方的真实链接。
+
+          热区本身是空的可点击区域，没有文字可显示「点击中」状态，
+          所以在里面铺一层 LinkPending：导航等待期间整行轻微压暗，
+          用户能立刻确认点击生效（本地几乎无感，真实网络下很有用）。 */}
       <Link
         href={`/blog/${post.slug}`}
         className="absolute inset-0 z-0"
         aria-label={post.title}
         tabIndex={-1}
-      />
+      >
+        <LinkPending />
+      </Link>
 
       <div className="pointer-events-none relative z-10 flex flex-col gap-2 py-6 transition-colors duration-200 group-hover:bg-surface sm:px-4 sm:-mx-4 sm:rounded-lg">
         <div className="flex items-baseline gap-3 text-[13px]">
@@ -61,7 +68,7 @@ export function PostCard({ post }: { post: Post }) {
             className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 bg-accent transition-all duration-200 group-hover:w-6"
           />
           <span className="transition-colors group-hover:text-accent">
-            {post.title}
+            <LinkPending>{post.title}</LinkPending>
           </span>
         </h2>
 

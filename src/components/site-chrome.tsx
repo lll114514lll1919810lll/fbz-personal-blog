@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CONTENT_MAX_WIDTH, navLinks, siteConfig } from "@/lib/site";
+import { LinkPending } from "@/components/link-pending";
 
 export function SiteHeader() {
   return (
@@ -27,7 +28,7 @@ export function SiteHeader() {
               href={link.href}
               className="flex items-center py-3 text-secondary transition-colors hover:text-foreground sm:py-2"
             >
-              {link.label}
+              <LinkPending>{link.label}</LinkPending>
             </Link>
           ))}
         </nav>

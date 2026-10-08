@@ -102,10 +102,43 @@ export const metadata = {
 | 悬停微交互 | `post-card.tsx` | 列表项悬停时泛底色、横线延展、摘要和标签淡入 |
 | 正文宽度调节 | `post-body.tsx` | 文章页可切换窄/标准/宽三档，选择记在 localStorage |
 | 标签筛选 | `tag-filter-bar.tsx` | 列表页和标签页共用的筛选栏，点击跳独立地址可分享 |
+| 页面过渡 | `page-transition.tsx` | React View Transitions，App Router 路由切换自动触发 |
+| 点击反馈 | `link-pending.tsx` | 导航等待期间把链接压暗，确认点击生效 |
 | 代码高亮 | `next.config.ts` + Shiki | 构建期高亮，明暗双主题跟随系统，零客户端 JS |
 | 代码块交互 | `code-block.tsx` | 复制按钮、语言标签、横向滚动渐变提示 |
 
 改配色只需动 `globals.css` 顶部的 CSS 变量，明暗两套值一一对应。
+
+### 页面切换过渡
+
+用 React 19.2 canary 的 `<ViewTransition>` 实现，App Router 路由切换本身就是
+一次 transition，**不需要任何配置**。动效刻意做得很克制：淡入淡出 + 几像素
+垂直位移，180ms，符合极简风格。
+
+顶栏、底栏、阅读进度条都放在 `<ViewTransition>` **外面**，切换时保持静止——
+导航不该闪烁，读者的视线重心要稳定。
+
+有一个容易忽略的前提：**必须给 `ViewTransition` 传 `key`**，React 才会把新旧内容
+当成「退出 / 进入」这一对来处理。没有 `key` 时它认为只是原地更新，
+不会产生任何动画——表现是 `startViewTransition` 被调用了却看不到过渡。
+这里用 `pathname` 当 key。
+
+CSS 里还处理了两个容易被忽略的点：
+
+- `::view-transition { pointer-events: none }` —— 动画进行中浏览器遮罩会吞掉点击，
+  关掉它让点击直接落到新页面。
+- `prefers-reduced-motion: reduce` 下把 view-transition 的动画时长归零。
+  注意只改通用的 `animation-duration` 不够，浏览器仍会等动画结束才切换内容。
+
+不支持 View Transitions API 的浏览器（比如部分 Safari）内容照常切换，只是没有动画。
+
+### 点击反馈
+
+`useLinkStatus` 必须在 `<Link>` 的**后代组件**里调用，不能直接在 `<Link>` 上用，
+所以封装成了 `<LinkPending>`：导航等待期间把内容压暗到 0.45。
+
+卡片的热区链接是空的 `<a>`（absolute inset-0 铺满整行），没有文字可压暗，
+这时 `<LinkPending>` 不传 children，会自动铺满整个热区。
 
 ### 代码高亮与复制
 
