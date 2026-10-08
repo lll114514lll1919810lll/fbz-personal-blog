@@ -1,0 +1,180 @@
+export const metadata = {
+  title: "做了个轻量加解密小工具：文本和图片，五个端结果互通",
+  date: "2026-10-08",
+  publishedAt: "2026-10-08T23:00",
+  description: "一个不打算当密码学用的轻量加解密工具：算法细节、跨平台逐位一致怎么保证，以及怎么把 Windows 版压到 78 KB。",
+  tags: ["开源", "加密", "跨平台", "C"],
+}
+
+有些东西不值得为它上一整套加密方案，但直接贴在聊天窗口里也不合适。
+
+比如一段临时配置、几个测试参数、一个还没公开的链接，或者只是想让对方晚点再看的文本。明文发出去之后，通知预览、聊天记录、随手截图里都会留下它。
+
+这个工具做的事很简单：发送前按密钥混淆一遍，对方用同样的密钥还原。代码在 [Intelvor/encrypt](https://github.com/Intelvor/encrypt)，npm 包叫 `crypt-lite`。
+
+## 它不负责什么
+
+没有 KDF，也没有盐和认证标签。密钥只过一个 FNV-1a 哈希，轮次是个随手可改的整数。
+
+**别用它保护密码、证件、私钥、财务数据，或者任何真正需要保密的内容。** 这类场景请用经过审计的加密方案。
+
+它能覆盖的范围只有一种：内容敏感度不高，但你不希望它以一眼可读的样子出现。防窥、遮挡截图、临时传测试串都算。
+
+## 文本怎么处理
+
+密钥先过 FNV-1a，得到一个 32 位种子。每个字符再按自己在文本里的位置算一个偏移量：
+
+```js
+function makeShift(key, pos) {
+  const seed = hashKey(key);
+  let x = (seed + pos * 0x9e3779b9) | 0;
+  x = (x ^ (x >>> 16)) * 0x45d9f3b | 0;
+  x = (x ^ (x >>> 16)) * 0x45d9f3b | 0;
+  x = x ^ (x >>> 16);
+  return (x >>> 0) % 256;
+}
+```
+
+结果是 0 到 255。这个数不直接加在字符上。每个字符先在「安全码点表」里查到自己的下标，移动之后映射回码点，安全表排除了 C0/C1 控制字符（`0x00`–`0x1F`、`0x7F`–`0x9F`）和代理对区间（`0xD800`–`0xDFFF`）。
+
+这样算出来的密文不会变成控制字符，复制粘贴和存文件都不受影响。解密反着走一遍。
+
+### 位置按码点算
+
+`'🌍'.length` 在 JS 里是 2，它是一个代理对。如果按 `char` 下标算位置，emoji 和生僻字后面所有字符的位置都会错开一位，解不回来。
+
+所以位置统一按 Unicode 码点算，代理对算一个位置。中文、emoji、CJK 扩展区的字都在范围内。
+
+### 换行符统一成 LF
+
+`CRLF` 和单独的 `CR` 都先转成 `LF` 再处理。同一段文本在 Windows 桌面端、网页版和 Android 端要拿到相同的字节序列，否则同一份密文在不同平台上解出来会差一个字符。
+
+算法一致不代表输入一致，跨平台工具在这上面出问题的不少。
+
+## 图片怎么处理
+
+每一轮做两件事：用 Fisher-Yates 洗牌打乱像素顺序，随机数来自 xorshift32；然后对 RGB 三个字节做 XOR。
+
+alpha 不参与运算：
+
+```js
+out32[perm[i]] = (((v ^ k) & 0x00ffffff) | (v & 0xff000000)) >>> 0;
+```
+
+`& 0x00ffffff` 只让低 24 位进运算，高 8 位原样搬过去。带透明度的 PNG 处理完还是带透明度。
+
+解密时先还原像素顺序，再撤销 XOR。每一轮的种子不同（`seed ^ (r + 1) * 0x9e3779b9`），解密从最后一轮往回迭代。
+
+桌面版和网页版读入支持 PNG / JPG / BMP / GIF，导出统一存 PNG；Node 侧的文件接口只处理 PNG。
+
+## 多轮能做什么
+
+轮次可调，每一轮都用新的偏移量重算一遍，输出离原文更远。
+
+它变不成强加密。轮次调高不会多出 KDF、盐或认证，只是让输出更不像原文而已。
+
+## 五个端
+
+### 网页版
+
+`web/index.html` 是一个自包含的单文件页面，41 KB，没有构建步骤，也没有后端。文本和图片都在浏览器里处理，页面不上传任何东西。
+
+这份 `index.html` 同时是 Android 版的源文件，Android 专属逻辑用特性检测内联在里面，在网页上会自动闲置。
+
+<figure className="post-figure">
+  <img src="/images/crypt-lite/01-web.jpg" alt="网页版界面：密钥、轮次、seed 和输入输出框，页面底部是加密、解密、复制结果、回填输入和清空按钮" width={640} height={1347} />
+  <figcaption>图 1：网页版。密钥和轮次填在左边，seed 是密钥哈希出来的值，只用来对照。</figcaption>
+</figure>
+
+### Windows
+
+Win32 GUI，纯 C，图片交给 GDI+。控件是 owner-draw 自己画的，主题跟随系统，浅色深色两套都有。
+
+<figure className="post-figure">
+  <img src="/images/crypt-lite/02-windows-text.jpg" alt="Windows 版文本加解密界面，深色主题，输入「你好世界!」，输出「儗妠亦庞r」，底部显示加密完成 1 轮次 3 ms" width={1400} height={1050} />
+  <figcaption>图 2：Windows 版文本页，深色主题下的一组测试输入。</figcaption>
+</figure>
+
+<figure className="post-figure">
+  <img src="/images/crypt-lite/03-windows-image.jpg" alt="两个 Windows 窗口并排：左边是原图山景，右边同一张图加密后变成彩色噪点，尺寸都是 2200 x 1467" width={1800} height={1075} />
+  <figcaption>图 3：图片页。左原图，右同一张图加密后的结果，尺寸没变。</figcaption>
+</figure>
+
+### Linux
+
+GTK3，也是纯 C。
+
+<figure className="post-figure">
+  <img src="/images/crypt-lite/04-linux-text.jpg" alt="Linux 版文本加解密界面，输入 Linux GUI，输出一段混排字符，状态栏显示加密完成 1 轮次 0 ms" width={1233} height={909} />
+  <figcaption>图 4：Linux 版文本页。和 Windows 版同一套算法，界面用 GTK3 重画。</figcaption>
+</figure>
+
+<figure className="post-figure">
+  <img src="/images/crypt-lite/05-linux-image.jpg" alt="Linux 版图片加解密界面，加载了一张星空插画，显示已加载 2559 x 1589，旁边有加密、解密、保存 PNG 按钮" width={1233} height={909} />
+  <figcaption>图 5：Linux 版图片页。加载后会显示原始尺寸。</figcaption>
+</figure>
+
+### Android
+
+WebView 壳，套的就是上面那份 `index.html`，Java 层补平台能力。API 24 起。
+
+### npm 与命令行
+
+同一套算法打成了 Node 模块和 CLI：
+
+```bash
+npm i -g crypt-lite
+
+echo "hello" | crypt-lite text encrypt -k secret
+crypt-lite text decrypt -k secret -i enc.txt -o dec.txt
+crypt-lite image encrypt -k secret -r 4 -i in.png -o out.png
+```
+
+Node 18 起，图片部分依赖 `pngjs`。库模式可以直接用 `encryptText` 和 `encryptImageRGBA`，浏览器里把 `getImageData()` 拿到的 RGBA buffer 传进去就行。
+
+## 跨平台一致才是主要工作量
+
+界面画出来不难，难的是让五个端的输出逐位相同。
+
+同一个密钥、同一段输入、同一个轮次，在浏览器 JS、Node、Windows C、Linux C 和 Android WebView 里要得到完全一样的结果。为此有几件事必须提前定死：
+
+- 密钥哈希用 FNV-1a，取 32 位无符号
+- 乘法中间结果按 32 位整数溢出处理
+- 位置按码点算，代理对算一个
+- 换行符统一成 LF
+- 洗牌和 XOR 用的随机数序列、调用顺序固定
+- 解密时轮次倒序
+
+其中任何一条两边理解得不一样，就会出现这个平台能解、那个平台解不开。C 端带了 `crypto_selftest.exe`，跑 8 组固定向量；构建脚本里还有一组跨实现比对，拿 C 版本和 Node 参考实现逐位对照，覆盖 emoji 代理对、CJK 扩展 B 区、制表符换行，以及 1 到 4 轮。
+
+## 把 Windows 版压到 78 KB
+
+`encrypt.exe` 从 94720 字节降到 79872 字节，减了 15.7%，功能和界面没动。过程记在 `SIZE_OPTIMIZATION.md` 里。
+
+改动只有两处。
+
+**图标重压缩。** `app.ico` 占了整个 exe 的 31.6%（29889 / 94720），里面 4 张 PNG 用的是自适应滤波，对这种降采样噪声图反而压得更差。穷举滤波方式和 deflate 策略之后，最优组合是 `filter=0` 加 deflate level 9，256×256 那张从 21356 降到 15402 字节。像素逐字节比对，4 张全部 `diffBytes=0`。
+
+**编译开关。** 加了 4 个：
+
+```bat
+set SIZEOPT=-fno-asynchronous-unwind-tables -fno-ident -mno-stack-arg-probe -Wframe-larger-than=4096
+```
+
+省得最多的是 `-mno-stack-arg-probe`，单独贡献 7680 字节。MinGW 默认在每个函数序言里插栈探测代码，关掉以后所有函数一起变小。代价是栈帧超过一页（4096 字节）时可能跨过守护页崩溃，所以实测扫了一遍全程序栈帧，最大 2224 字节（`WndProc`），还有余量。`-Wframe-larger-than=4096` 留着当保险，以后有人写出超大栈帧会在编译期告警。
+
+顺手试过几个常规做法，在本项目里都是负收益：`-flto` 多出 3584 字节，`-ffunction-sections` 配 `-Wl,--gc-sections` 多出 2560 字节。代码量太小，跨文件内联和分段的开销超过了死代码消除省下的部分。
+
+## 边界
+
+不想让一段普通内容被直接扫到，这个工具够用。
+
+需要真正的安全，请用成熟的端到端加密工具或密码管理器，设强密钥，并确认消息完整性和发送者身份都有保障。
+
+代码：[Intelvor/encrypt](https://github.com/Intelvor/encrypt)（MIT）
+
+CLI：[npm/crypt-lite](https://www.npmjs.com/package/crypt-lite)
+
+---
+
+*文中的体积、耗时都是本机实测值，不代表普遍情况。*
