@@ -8,11 +8,19 @@ import { useCallback, useSyncExternalStore } from "react";
  * 每档给出正文内容区的 max-width，用 rem 而不是 px：
  * 中文字宽是全角，px 宽度在不同字号下对应的字数会飘，
  * 而 rem 会跟着根字号一起缩放。
+ *
+ * 三档等距：36 / 52 / 68，每档相差16rem。跨度必须一致，
+ * 否则从「标准」切到「宽」会感觉跳了一大步，回切又觉得没变化。
+ *
+ * 最宽档的 68rem 是算出来的：桌面端正文 + 目录侧栏(16rem) + 间距(3rem)
+ * 整块约占顶栏内容区(CONTENT_MAX_WIDTH 减内边距)的 80%，
+ * 即 68 + 16 + 3 = 87rem ≈ 1392px / 1744px ≈ 79.8%。
+ * 想继续加宽就调这里，注意侧栏宽度在 table-of-contents.tsx 里是 w-64。
  */
 export const READING_WIDTHS = [
   { id: "narrow", label: "窄", hint: "每行约 34 字", maxWidth: "36rem" },
-  { id: "medium", label: "标准", hint: "每行约 42 字", maxWidth: "44rem" },
-  { id: "wide", label: "宽", hint: "每行约 50 字", maxWidth: "52rem" },
+  { id: "medium", label: "标准", hint: "每行约 49 字", maxWidth: "52rem" },
+  { id: "wide", label: "宽", hint: "每行约 64 字", maxWidth: "68rem" },
 ] as const;
 
 export type WidthId = (typeof READING_WIDTHS)[number]["id"];
