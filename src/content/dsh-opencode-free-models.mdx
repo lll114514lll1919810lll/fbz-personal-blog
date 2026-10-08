@@ -1,0 +1,852 @@
+export const metadata = {
+  title: "在 DSH 里白嫖 OpenCode 免费模型的两个方法",
+  date: "2026-10-08",
+  description: "OpenCode Zen 的匿名免费通道实测：装 DSH 插件和自建网关两条路的完整配置、六个坑的复现，以及模型可用性数据。",
+  tags: ["DSH","OpenCode","代理池","新手教程","Go"],
+}
+
+OpenCode Zen 有一条**匿名免费通道**——不需要登录或者 API Key，鉴权头就是字面量 `public`。DeepSeek Harness（下称 DSH）里想用上它，目前有两条路：
+
+1. **装插件** `@opencode2dsh/dsh-plugin`，让 DSH 原生对接 Zen。大约 10 分钟。
+2. **自己部署网关** [opencode2api](https://github.com/jasonxu114514/opencode2api)，把 Zen 翻译成标准 OpenAI / Anthropic API。大约 30 分钟。
+
+两条路我都完整跑过一遍，也都踩进了各自的坑。这篇文章把架构、配置、实测数据和坑一次讲清楚，并且给出可以直接抄作业的步骤。
+
+**两条路可以并存，不用二选一。** 插件服务的是 DSH 自己，网关服务的是"所有 OpenAI 兼容客户端"，插件就是参考了网关的设计。我最后是两条都留着，共用同一批出口。
+
+**先看选哪条：**
+
+| 你的情况 | 建议 |
+| --- | --- |
+| 只打算在 DSH 里用 | 走**方法一（插件）**，省事得多 |
+| 还想给 Claude Code、Cursor、Cherry Studio 或自己的脚本用 | 走**方法二（网关）** |
+| 两个都要 | 两条都装，共用同一批出口，文末有配置示例 |
+
+---
+
+## 零、开始之前
+
+### 你需要准备的东西
+
+| 项目 | 说明 |
+| --- | --- |
+| 电脑 | Windows / macOS / Linux 都行。本文命令以 Windows 为主，其他系统会额外标注 |
+| DSH | 已安装并能正常打开 |
+| **一个或多个代理出口** | **最关键的准备项**，见下一节 |
+| 时间 | 加上等待下载，大约 30 分钟 |
+
+### 为什么必须有"代理出口"
+
+这是全文最重要的前置知识，建议读完再动手。
+
+OpenCode 的免费通道由所有人共用，凭证就是 `public` 这几个字母。上游区分不了你是谁，只能按**出口 IP** 来限额。如果你手里只有一条线路、一个 IP，用不了多久就会撞上限流，想长期使用，一个 IP 池是必不可少的：准备**多个不同 IP 的出口**，让请求轮换着走。你的机场（代理订阅服务）里那几十个节点，正是干这个用的。
+
+### 名词速查
+
+不熟悉的话，先扫一眼这张表，后面的配置会好懂很多。
+
+| 名词 | 一句话解释 |
+| --- | --- |
+| **机场** | 卖代理订阅的服务商，一份订阅里通常有几十个不同地区的节点 |
+| **节点 / 出口** | 一条代理线路。走某个节点访问网站时，对方看到的 IP 就是那个节点的 |
+| **出口 IP** | 网站实际看到的你的 IP。不同节点可能共用同一个 IP，这点后面会重点讲 |
+| **订阅链接** | 机场给你的一个网址，客户端访问它就能拿到全部节点列表 |
+| **代理端口** | 本机监听的一个端口（如 `127.0.0.1:24000`），把流量交给它就会从对应节点出去 |
+| **落地 / 落地器** | 把机场的加密节点（`ss://`、`vmess://` 等）在本机转成普通 HTTP/SOCKS5 端口的程序 |
+| **SSE** | 流式响应协议。AI 对话的打字机效果就是它 |
+| **prompt cache** | 上游的提示缓存。命中后相同内容不重复计算一遍，能省钱也能提速 |
+
+### 一个绕不开的前提
+
+两条路都躲不过同一件事：**把机场订阅变成一组本地代理端口**。
+
+机场订阅里的节点是 `ss://`、`vmess://`、`vless://`、`hysteria2://` 这类加密协议，而插件和网关只认普通的 `http://` 和 `socks5://` 代理。中间需要一个程序做转换。
+
+方法二的**步骤 1 到步骤 3** 就是干这件事的，而且方法一也要用到它的产物。所以建议**先做完这三步，再回到你选的那条路**。
+
+---
+
+## 一、先搞清楚上游的规则
+
+读完这一段，后面的配置就不会看得莫名其妙。
+
+**规则一：匿名通道按 IP 限流。** 出口越多越抗用。这就是要折腾代理池的全部理由。
+
+**规则二：请求必须"看起来像 agent 流量"。** 上游会检查两件事：会话 ID 的格式是否符合规范，以及请求体里有没有核心工具定义、是不是流式。格式不对的免费请求会直接吃 `403 FreeTierError`。合法的会话 ID 长这样：
+
+```go
+// "ses_" + 12 位小写十六进制时间戳 + 14 位 Base62
+var canonicalSessionPattern = regexp.MustCompile(`^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`)
+```
+
+好消息是插件和网关都已经替你处理好了，你不用管这一层。
+
+**规则三：免费模型列表随时会变。** 写这篇文章时实测，`deepseek-v4-flash-free` 上游返回 `400`，报"模型不可用"；`mimo-v2.5-free` 返回 `410`，并要求换用 `mimo-v2.6-flash-free`。这两个模型**仍然挂在模型的列表接口里**。所以列表只能当参考，能不能用要实际发一次请求才知道。
+
+这条通道能用，但它属于**需要持续维护的适配层**，上游随时可能调整策略。这是选型时最该记住的一点。
+
+---
+
+## 二、方法一：装插件（约 10 分钟）
+
+### 适合谁
+
+只在 DSH 里用 OpenCode 免费模型。插件不启动任何本地进程，也不占用端口。当然，也只能服务于 DSH。
+
+### 原理（了解即可，可跳过）
+
+插件在 DSH 里注册一个原生的模型适配器，然后**把自己的请求伪装成 OpenCode 官方 CLI 发出的流量**：
+
+```text
+DSH 会话
+   │  harness chunk
+   ▼
+ZenAdapter（注册的 LlmAdapter）
+   │  pi-ai openai-completions 流式
+   ▼
+https://opencode.ai/zen/v1   ← Authorization: Bearer public
+   携带与 CLI 同形的请求头：
+     user-agent: opencode/…
+     x-opencode-client, x-opencode-session, x-session-affinity,
+     X-Session-Id, x-opencode-request, x-opencode-project
+```
+
+会话/项目 ID 由会话首条用户消息经 SHA-256 派生（同一会话稳定、不可逆推），每个请求再附带一个新的随机 request id。
+
+模型目录用**三级回退链**保证可用：实时 `GET /v1/models` → models.dev 定价元数据判定"免费" → 编译期验证的静态名单。上游挂了就退回磁盘缓存（约 7 天有效期）。
+
+### 前置条件
+
+- DSH 0.1.7 或更高版本
+- 能正常访问 `opencode.ai` 和 `models.dev`
+
+### 步骤 1：安装插件
+
+在 DSH 里打开 **插件** 页面，添加插件 `@opencode2dsh/dsh-plugin` ，点安装。
+
+或者用命令行。⚠️ **桌面版不能用这条命令**——`dsh` 的 CLI 显式拒绝 `desktop` 这个 profile 名：
+
+```js
+function rejectElectronProfile(program, profile) {
+  if (profile.toLowerCase() === "desktop")
+    program.error('error: profile "desktop" is managed exclusively by the Electron application');
+}
+```
+
+`desktop` profile 由 Electron 应用独占托管，所以：**桌面版用户请走设置 → 插件市场**，不要试图跑命令行。命令行只适用于自建 / Web profile：
+
+```sh
+dsh plugin --profile web add @opencode2dsh/dsh-plugin
+```
+
+> 顺带一提：`dsh plugin --profile <name> <args>` 其实就是把参数**转发给 pnpm** 在 profile 目录里执行。所以 `outdated` / `update` / `add` / `list` 都能直接用。
+
+**你应该看到**：命令输出里出现 `+ @opencode2dsh/dsh-plugin x.y.z`，没有红色报错。常见报错，DSH 一般也能帮你解决。
+
+### 步骤 2：确认模型出现
+
+加载插件后 DSH 会热重载，在模型选择器里应该能看到一个叫 **opencode2dsh** 的分组。
+
+如果只出现 3 个模型，通常是启动时网络还没就绪。插件**只在目录完全为空时**才会重试：每 15 秒一次，最多 4 次（约 60 秒），之后转入 5 分钟的常规刷新。如果它已经抓到了几个模型但数量明显偏少，就**不会**触发这轮快速重试——那种情况得等下一轮常规刷新，或者重启 DSH。可以打开这个文件确认状态：
+
+```text
+~/.opencode2dsh/adapter-status.json
+```
+
+内容大致如下。`lastError` 为空、`exposed` 明显小于 `total`，就说明正常：
+
+```json
+{
+  "status": "ready",
+  "total": 86,
+  "exposed": 13,
+  "lastRefresh": "2026-10-06T14:26:12.004Z",
+  "lastError": "",
+  "writtenAt": "2026-10-06T14:26:42.661Z"
+}
+```
+
+各字段含义：`total` 是上游返回的原始模型数，`exposed` 是经过"免费 / 未废弃"判定后真正暴露出来的数量，两个数**本就应该不相等**。`status` 有三种取值，排查时都要认得：
+
+| `status` | 含义 | 该怎么办 |
+| --- | --- | --- |
+| `pending` | 一次都没成功抓取过 | 网络不通，看 `lastError` |
+| `stale` | 抓到过，但超过 10 分钟没刷新 | 网络时断时续，或重启看看 |
+| `ready` | 数据新鲜 | 正常 |
+
+如果 `lastError` 一直显示 `fetch failed`，说明你的网络连不上 `opencode.ai`，需要走代理——这正是下一步要解决的事。
+
+如果已经能正常体验免费模型，并且你的用量需求不大，**到这一步就基本完成了**。
+
+### 步骤 3：配置出口池（进阶）
+
+**跳过这一步会怎样？** 插件会直接用你的真实 IP 请求上游。能用，但很快会撞上限流，也就是很多人遇到的"对话中报限流错误"。
+
+**请先完成方法二的步骤 1 到步骤 3**，拿到一份端口清单（形如 `127.0.0.1:24001`、`127.0.0.1:24002`……），然后回到这里。
+
+#### 3.1 找到配置文件
+
+编辑 profile 目录下的 `cordis.patch.yml`：
+
+```text
+Windows:     %DSH_HOME%\profiles\<profile 名>\cordis.patch.yml
+macOS/Linux: $DSH_HOME/profiles/<profile 名>/cordis.patch.yml
+```
+
+`$DSH_HOME` 默认是 `~/.dsh`；桌面版的 profile 名由 Electron 决定，同样以 `$DSH_HOME` 为根。**不要硬编码 `desktop` 这个目录名**——请用你实际在用的 profile 名（Web 版通常是 `web`）。
+
+文件里应该已经有 `@opencode2dsh/dsh-plugin` 这一条。找到它，把 `config` 改成下面这样：
+
+```yaml
+- id: opencode2dsh
+  name: "@opencode2dsh/dsh-plugin"
+  config:
+    ipPool:
+      enabled: true
+      manual:
+        - http://127.0.0.1:24001
+        - http://127.0.0.1:24002
+        - http://127.0.0.1:24003
+        # …把你探测出来的端口全部列在这里
+      free:
+        enabled: false
+      probeModels:
+        - ling-3.1-flash-free
+        - space-bunny-free
+```
+
+四个字段的作用：
+
+| 字段 | 含义 | 注意事项 |
+| --- | --- | --- |
+| `manual` | 手填代理列表 | 必须带 `http://` 前缀，原因见下方说明 |
+| `free` | 抓公网免费代理 | **默认是开的，务必关掉**，见"坑二" |
+| `probeModels` | 用来做健康探测的模型 | 填两个你知道能用的 |
+| `subscription.urls` | 机场订阅直读 | 加密节点要靠 sing-box 转换，见"坑三" |
+
+⚠️ **`manual` 的写法有个坑**：插件要求必须带 `http://` 或 `socks5://` 前缀，但**不接受 `socks5h://127.0.0.1:端口`** 这种 IPv4 写法（它的正则只对 IPv6 形式放行 `socks5h`）。统一写成 `http://` 最稳妥——easy-proxies 的端口同时支持 HTTP 和 SOCKS5，用 HTTP 完全没问题。
+
+> 📌 **下面这条解释了 3.2 那个"别碰卡片"的警告**：`ipPool` 在插件源码里标了 `.volatile()`，并且插件源码里明确写着这份配置**只能经由 `cordis.patch.yml`（代码位置或手改的 profile patch）设置，绝不由设置卡片写入**。卡片绑定的是内存中的旧值，一旦点开保存就会把你的手改覆盖回去。所以正确姿势始终是：关掉卡片 → 手改文件 → 重启。
+
+#### 3.2 重启 DSH
+
+保存后，完全退出 DSH 再重新打开。
+
+⚠️ **重启之前不要点开 IP 池设置卡片并保存。** 理由见上面那条 `📌` 注解。
+
+#### 3.3 验证配置生效
+
+重启后可以这样查（Windows PowerShell；macOS/Linux 用 `curl` 等价写法）：
+
+```powershell
+Invoke-RestMethod -Uri 'http://127.0.0.1:19387/api/opencode2dsh/ip-pool/status' `
+  -Method Post -Body '{}' -ContentType 'application/json' |
+  Select-Object -ExpandProperty value |
+  Select-Object enabled, total, state,
+    @{n='manual';e={$_.bySource.manual}}, @{n='free';e={$_.bySource.free}}
+```
+
+**你应该看到**：
+
+```text
+enabled total state      manual free
+------- ----- ------     ------ ----
+   True    28 emergency      28    0
+```
+
+`manual` 等于你填的端口数、`free` 为 0，就说明配置生效了。
+
+`state` 显示 `emergency` 不用管。它是按"公网代理池"的比率算出来的，你已经把那个池子关了，所以它永远停在这个值，也没有程序会去读它。
+
+### 方法一的限制
+
+- **只服务 DSH**。Claude Code、Cursor 这些用不了。
+- **探测数据可能一直是空的**。受"坑六"那个 bug 影响，IP 池卡片里出口的 IP、延迟、质量分可能永远显示为空。这不影响实际请求走代理。
+- **上游改规则后要等插件更新，本文基于插件版本 0.3.7**。
+
+---
+
+## 三、方法二：自建网关（约 30 分钟）
+
+### 适合谁
+
+除了 DSH，还想给其他 OpenAI / Anthropic 兼容客户端用。
+
+### 它比插件多了什么
+
+网关是一层**协议翻译服务器**，对外暴露三个标准接口：
+
+| 协议 | 路径 | 谁在用 |
+| --- | --- | --- |
+| Chat Completions | `/v1/chat/completions` | OpenAI 经典接口，绝大多数客户端 |
+| Responses | `/v1/responses` | OpenAI 新一代接口 |
+| Anthropic Messages | `/v1/messages` | Claude Code |
+
+这三个接口它都能收，也都能转成上游模型实际支持的那个协议再发出去。比如 Claude Code 只会说 Anthropic 协议，而某个免费模型只支持 Chat 协议，网关就在中间做翻译。
+
+它用 Go 写成单个可执行文件，管理界面已经打包进去。运行时无需 Node.js 和数据库。
+
+### 步骤 1：准备出口端口（easy-proxies）
+
+这一步把机场订阅变成一组本地端口。
+
+#### 1.1 下载
+
+打开 [easy-proxies 的 Releases 页面](https://github.com/daimon3332/easy-proxies/releases/latest)，下载对应系统的压缩包：
+
+| 系统 | 文件 |
+| --- | --- |
+| Windows（Intel/AMD） | `windows-amd64.zip` |
+| Windows ARM | `windows-arm64.zip` |
+| Linux（Intel/AMD） | `linux-amd64.zip` |
+| Linux ARM64 | `linux-arm64.zip` |
+
+解压到一个新文件夹。
+
+#### 1.2 生成配置并启动
+
+```powershell
+# Windows
+Copy-Item config.example.yaml config.yaml
+.\easy_proxies.exe -config config.yaml
+```
+
+```bash
+# Linux / macOS
+cp config.example.yaml config.yaml
+chmod +x easy_proxies
+./easy_proxies -config config.yaml
+```
+
+**你应该看到**：终端里有日志输出，浏览器能打开 `http://127.0.0.1:9091`（这是它的管理界面）。
+
+#### 1.3 导入你的机场订阅
+
+1. 在管理界面找到"导入节点"
+2. 粘贴你的**订阅链接**
+3. 等它自动测速跑完
+
+**你应该看到**：测速完成后，节点池里出现一批可用节点，每个节点被分配了一个本地端口，**从 24000 开始依次递增**。启动日志里会长这样：
+
+```log
+INFO[0000] inbound/mixed[...]: tcp server started at 127.0.0.1:24000
+INFO[0000] inbound/mixed[...]: tcp server started at 127.0.0.1:24001
+INFO[0000] inbound/mixed[...]: tcp server started at 127.0.0.1:24002
+…
+```
+
+记下端口范围（比如 24000 到 24031），下一步要用。
+
+> **为什么选它**：它给每个可用节点分配一个独立端口，正好满足"多出口"的需求；而且**端口号长期稳定**——订阅更新、节点换 IP，本地端口不变，你的配置不用改。
+
+### 步骤 2：探测真实出口 IP 并去重
+
+**这一步不能省。** 机场的节点名会骗人，而且多个节点可能共用同一个出口 IP。
+
+最常见的是机场的"信息节点"——名字里塞的是套餐号、剩余流量、到期日，实际指向的是同一台服务器。实测我这边 32 个端口里，有 5 个指向同一个 IP：
+
+```text
+xx-7                xx-59-36-gb
+xx-2027-09-13       xx-kitty-fo
+```
+
+这四条加上 `xx-united-states-01`，出口 IP 完全相同。如果不去重，等于让你的请求有 15% 的概率打在同一个 IP 上，对绕过限流起反作用。
+
+顺便还发现名为 `xx-netherlands-02` 的节点实际落在 **德国法兰克福**。
+
+#### 2.1 保存下面的脚本
+
+存成 `check-egress.ps1`：
+
+```powershell
+param([int]$Start = 24000, [int]$End = 24031, [int]$Timeout = 8)
+
+$rows = @()
+foreach ($p in $Start..$End) {
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $ip = & curl.exe -s --max-time $Timeout -x "http://127.0.0.1:$p" https://api.ipify.org 2>$null
+    $sw.Stop()
+    $ip = ($ip -join '').Trim()
+    if ($ip -match '^(\d{1,3}\.){3}\d{1,3}$') {
+        Write-Host ("  {0}  {1}" -f $p, $ip) -ForegroundColor Green
+        $rows += [pscustomobject]@{ Port = $p; IP = $ip; Ms = $sw.ElapsedMilliseconds }
+    } else {
+        Write-Host ("  {0}  FAILED" -f $p) -ForegroundColor DarkGray
+    }
+}
+
+Write-Host ""
+Write-Host ("可用端口 {0} / {1}, 不同出口 IP {2}" -f `
+    $rows.Count, ($End - $Start + 1), ($rows.IP | Sort-Object -Unique).Count)
+
+# 按出口 IP 归组，每组保留最快的一个端口
+$best = $rows | Group-Object IP | ForEach-Object {
+    ($_.Group | Sort-Object Ms | Select-Object -First 1)
+} | Sort-Object Ms
+
+"# opencode2api 出口池 — 每个出口 IP 保留一条" | Set-Content proxies.txt -Encoding UTF8
+$best | ForEach-Object {
+    "socks5h://127.0.0.1:$($_.Port)  # $($_.IP)  $($_.Ms)ms"
+} | Add-Content proxies.txt -Encoding UTF8
+
+Write-Host ("已生成 proxies.txt，共 {0} 条" -f $best.Count) -ForegroundColor Cyan
+```
+
+#### 2.2 运行
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\check-egress.ps1 -Start 24000 -End 24031
+```
+
+**你应该看到**：每个端口一行，后面跟着它真实的出口 IP，最后是汇总：
+
+```text
+  24000  203.0.113.10
+  24001  203.0.113.22
+  24002  203.0.113.31
+  …
+
+可用端口 32 / 32, 不同出口 IP 28
+已生成 proxies.txt，共 28 条
+```
+
+**重点看"不同出口 IP"这个数字。** 如果只有三五个，说明你的机场节点大量复用同一落地，配太多条没有意义，按去重后的结果用就行。
+
+### 步骤 3：确认 proxies.txt
+
+脚本会自动生成，内容大致如下（`#` 后面是注释，留不留都行）：
+
+```text
+# opencode2api 出口池 — 每个出口 IP 保留一条
+socks5h://127.0.0.1:24021  # 203.0.113.45  578ms
+socks5h://127.0.0.1:24002  # 203.0.113.46  619ms
+socks5h://127.0.0.1:24020  # 203.0.113.47  733ms
+…
+```
+
+格式规则很简单：**一行一个**，支持 `#`、`;`、`//` 三种注释（必须在行首，或者前面有个空格）。
+
+> 用 `socks5h://` 而不是 `socks5://`，区别是 `h` 表示 DNS 交给代理解析。这样能避开本地 DNS 污染，也能防止你真实访问的域名泄漏出去。
+
+### 步骤 4：安装并配置 opencode2api
+
+#### 4.1 下载
+
+从 [Releases 页面](https://github.com/jasonxu114514/opencode2api/releases)下载对应系统的压缩包并解压。
+
+想从源码构建也行，需要 Go 1.24 或更高版本：
+
+```bash
+go build -o opencode2api ./cmd/opencode2api
+```
+
+#### 4.2 复制配置模板
+
+```powershell
+Copy-Item config.example.json config.json
+```
+
+#### 4.3 修改 config.json
+
+用记事本或 VS Code 打开，改成这样：
+
+```json
+{
+  "listen": "127.0.0.1:8080",
+  "server_keys": [
+    "local-api-key"
+  ],
+  "zen_keys": [],
+  "go_keys": [],
+  "anonymous": true,
+  "proxies": [],
+  "proxyfile": "proxies.txt",
+  "upstream": {
+    "zen": "https://opencode.ai/zen",
+    "go": "https://opencode.ai/zen/go"
+  },
+  "retry": {
+    "max_attempts": 3,
+    "timeout_seconds": 300
+  },
+  "models": {
+    "refresh_seconds": 300,
+    "protocols": {}
+  },
+  "performance": {
+    "max_idle_conns": 2048,
+    "max_idle_conns_per_host": 256,
+    "max_conns_per_host": 0,
+    "idle_conn_timeout_seconds": 120,
+    "connect_timeout_seconds": 5,
+    "failure_cooldown_seconds": 15,
+    "attempt_timeout_seconds": 0
+  },
+  "logging": {
+    "level": "info",
+    "ring_size": 2000,
+    "dump_request_bodies": false
+  },
+  "webui": {
+    "enabled": false,
+    "listen": "127.0.0.1:8081",
+    "username": "admin",
+    "password": "change-this-admin-password",
+    "session_ttl_minutes": 720
+  },
+  "prefer": "go",
+  "reasoning": {
+    "effort": "medium"
+  }
+}
+```
+
+一些字段的说明：
+
+| 字段 | 填什么 | 为什么 |
+| --- | --- | --- |
+| `server_keys` | **自己随便定一个字符串** | 客户端连你网关时要带的密码，跟你上游的 Key 无关 |
+| `zen_keys` / `go_keys` | 留空数组 | 用匿名免费通道就不需要上游 Key |
+| `anonymous` | `true` | 打开匿名通道 |
+| `proxies` | **必须留空 `[]`** | 见下方警告 |
+| `proxyfile` | `"proxies.txt"` | 上一步生成的文件；相对路径是相对 config.json 所在目录 |
+| `webui` | **建议关掉，或至少收紧 `listen`** | 见下方警告 |
+| `password` | **一个 10 位以上强密码** | webui 访问密码，修改并启动后该项自动变成哈希值 |
+
+⚠️ **`proxies` 这一项一定要清空。** 网关的合并顺序是"内联列表在前，文件条目在后"，而 Key 按下标轮询绑定到代理上（`proxies[i % N]`）。如果你留着默认的 `"proxies": ["direct"]`，`direct`（直连，也就是你的真实 IP）会排在第一位，**所有请求都从真实 IP 出去**，前面辛苦配的代理池一点用不上。
+
+⚠️ **`webui` 是独立于 `listen` 的另一个监听端口。** 模板默认是 `"enabled": true` + `"listen": "0.0.0.0:8081"` + 明文密码 `change-this-admin-password`——等于**默认对整个局域网开放、且密码是公开的**。而它能展示上游 Key 和代理凭据，`/api/config/reveal` 还能解密明示。本文所有操作（改配置、重载代理）都能靠重启完成，用不着 WebUI，所以**最省事的做法是干脆关掉**。确实要用的话，也至少把 `enabled` 改 `false` 或把 `listen` 收到 `127.0.0.1`，并换掉那个默认密码。
+
+#### 4.4 把 proxies.txt 放到 config.json 旁边
+
+两个文件放在同一个目录里就行。
+
+#### 4.5 启动（以 Windows 为例）
+
+```powershell
+.\opencode2api.exe -config config.json
+```
+
+**你应该看到**：类似这样的日志
+
+```json
+{"level":"INFO","msg":"server listening","component":"api","event":"server_started","address":"127.0.0.1:8080"}
+{"level":"INFO","msg":"model catalog refreshed","component":"models","event":"catalog_refreshed","models":79}
+```
+
+### 步骤 5：验证
+
+#### 5.1 看健康状态
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8080/healthz | Select-Object -ExpandProperty proxies
+```
+
+**你应该看到**：
+
+```text
+total healthy unhealthy
+----- ------- ---------
+   28      28         0
+```
+
+`total` 等于 `proxies.txt` 里的条目数，就说明代理池加载成功了。
+
+#### 5.2 看有哪些模型能用
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8080/v1/models `
+  -Headers @{ 'Authorization' = 'Bearer 你刚才定的密码' } |
+  Select-Object -ExpandProperty data |
+  Select-Object -ExpandProperty id
+```
+
+#### 5.3 发一次真实请求
+
+```powershell
+$body = @{
+  model = 'space-bunny-free'
+  messages = @(@{ role = 'user'; content = 'reply with exactly: PONG' })
+  max_tokens = 32
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod http://127.0.0.1:8080/v1/chat/completions -Method Post `
+  -Headers @{ 'Authorization' = 'Bearer 你刚才定的密码' } `
+  -ContentType 'application/json' -Body $body |
+  Select-Object -ExpandProperty choices |
+  Select-Object -ExpandProperty message
+```
+
+**你应该看到**：返回内容里有 `PONG`。
+
+如果这一步失败，看终端日志里那条 `request routed`，其中的 `attempts` 字段会告诉你它试了几个出口。试了很多个才成功属于正常——**这正是多出口池在起作用**。
+
+### 步骤 6：接入客户端
+
+网关地址是 `http://127.0.0.1:8080/v1`，API_KEY 用你 `server_keys` 里填的那个。常用客户端均支持兼容接口。
+
+#### 6.1 先把密码放进环境变量
+
+⚠️ **这一步不能跳。** `apiKeyEnv` 填的是**环境变量的名字**，不是密码本身。DSH 会在每次发请求时去读这个环境变量；读不到就直接报 `MISSING_CREDENTIAL`，而且 pi-ai 的 OpenAI 兼容实现**没有 key 会直接拒绝请求**——哪怕你的网关其实并不校验。
+
+`MY_GATEWAY_KEY` 这个名字要和下面的配置对得上：
+
+```powershell
+# PowerShell（当前会话）
+$env:MY_GATEWAY_KEY = "你刚才在 server_keys 里定的密码"
+
+# 想永久生效（用户级环境变量，重开终端才生效）
+[Environment]::SetEnvironmentVariable("MY_GATEWAY_KEY", "你刚才在 server_keys 里定的密码", "User")
+```
+
+```bash
+# Linux / macOS，写进 ~/.bashrc 或 ~/.zshrc 后重开终端
+export MY_GATEWAY_KEY="你刚才在 server_keys 里定的密码"
+```
+
+设好之后**要完全退出并重开 DSH**，它才能读到新环境变量。
+
+**如果客户端在 DSH 里**，编辑 profile 的 `cordis.patch.yml`：
+
+```yaml
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      mygateway:
+        api: openai-completions
+        baseURL: http://127.0.0.1:8080/v1
+        apiKeyEnv: MY_GATEWAY_KEY
+        models:
+          - id: space-bunny-free
+            name: space-bunny-free
+            contextWindow: 1048576
+```
+
+**如果是其他客户端**（Cherry Studio、Cursor 等），在设置里填自定义 OpenAI 兼容端点，地址和密码同上。
+
+### 步骤 7：日常维护
+
+| 什么时候 | 做什么 |
+| --- | --- |
+| 机场订阅更新后 | 重跑一次 `check-egress.ps1`，因为端口背后的节点可能换了 |
+| 想加/减出口 | 改 `proxies.txt`，然后重启网关（若你保留了 WebUI，也可以点"从磁盘重载"） |
+| 改了 config.json | 同样需要重启才生效 |
+
+---
+
+## 四、实测踩出来的六个坑
+
+这一节是全文最实用的部分，都是实际撞出来的。
+
+### 坑一：`socks5h` 在插件里会被判非法
+
+同一个出口池，在 opencode2api 的 `proxies.txt` 里写 `socks5h://127.0.0.1:24001` 没问题，直接贴进插件的 `manual` 就会报 `invalidProxy`。
+
+原因是插件那条校验正则的第三条分支只匹配 IPv6 方括号形式，IPv4 加 `socks5h` 不在白名单里。
+
+**解决**：插件里统一用 `http://` 前缀。
+
+### 坑二：插件的公网代理池默认开着
+
+插件的 `free` 字段默认是 `true`：
+
+```js
+free: Schema.object({
+    enabled: Schema.boolean().default(true),   // ← 不写就是 true
+    targetSize: Schema.number().min(1).max(100).step(1).default(20),
+    blockedCountries: Schema.array(Schema.string()).default(["CN"])
+}),
+```
+
+不显式关掉，它就会去 GitHub 上的公开代理列表（ProxyScraper、TheSpeedX、monosans…）抓取一批**来路不明的公共代理**塞进池子一起用。插件自己的界面文案也标了风险：*"public free proxies carry security and compliance risk"*。
+
+注意 `targetSize: 20` 是**目标规模上限**、不是抓取条数——实际进了多少个，取决于那几个列表当下有多少可用地址，有时远达不到 20 个。
+
+**解决**：配 `free.enabled: false`，用自己的机场出口。
+
+### 坑三：没装 sing-box，订阅通道就是摆设
+
+插件支持直接吃机场订阅（`subscription.urls`），但加密节点必须经过 sing-box 转换成本地代理。缺少 sing-box 时的报错很明确：
+
+```js
+throw new Error(`sing-box not found on PATH ("${bin}"); install it or set singbox.path`);
+```
+
+没装的话，那些节点会全部停在"待转换"状态，一个都用不上——查状态时 `subscription: 0` 就是证据。
+
+**解决**：我没装 sing-box，直接用 `manual` 指向 easy-proxies 的端口。两条链路做同一件事只会让排查更麻烦。
+
+### 坑四：机场的"信息节点"指向同一台服务器
+
+详见步骤 2 的说明。要点是**必须探测真实出口 IP 并按 IP 去重**。
+
+### 坑五：`direct` 放在最后，实际顺序和位置无关
+
+把 `direct` 写在 `proxies.txt` 最后一行，它并不会因此被排在最后尝试。匿名池的游标起点是哈希算出来的：
+
+```go
+hash := fnv.New64a()
+hash.Write([]byte(affinity))
+start := int(hash.Sum64() % uint64(len(p.nodes)))
+```
+
+所以 `direct` 有大约 **1/29（3.4%）** 的机会在任何一次请求里被**选中尝试**，真实 IP 偶尔会直接暴露给上游。这里要强调一遍：**把 `direct` 写在最后并不能降低这个概率**——起点是均匀随机落在 `[0, N)` 上的哈希结果，与数组里的位置毫无关系。排在第一位和排在最后一位，被选中的概率**完全相同，都是 1/N**。想真正避开，只能把它从池子里彻底删掉。要不要保留这个兜底，取决于你更看重可用性还是 IP 纯净度。
+
+### 坑六：`manual` 带 `http://` 会让插件探测永远失败（已提 issue）
+
+这是我在 `@opencode2dsh/dsh-plugin` 里挖出来的真 bug，已经核对上游源码确认 **0.3.7 仍未修复**。
+
+`parseManualProxy` 返回的 `id` 保留了用户写的完整前缀：
+
+```ts
+return { id: trimmed, protocol }   // id = "http://127.0.0.1:24001"
+```
+
+而 `pool/admission.ts` 里又无条件拼了一次：
+
+```ts
+uri: candidate.protocol === 'socks5'
+  ? `socks5://${candidate.address}`
+  : `http://${candidate.address}`,      // → "http://http://127.0.0.1:24001"
+```
+
+实测：
+
+```text
+new ProxyAgent({ uri: 'http://127.0.0.1:24021' })        -> HTTP 200 {"status":"success","query":"203.0.113.45"}
+new ProxyAgent({ uri: 'http://http://127.0.0.1:24021' }) -> InvalidArgumentError: invalid url
+
+admitCandidate address="http://127.0.0.1:24021"   → admitted=false, reason=agent-build: invalid url
+admitCandidate address="127.0.0.1:24021"          → admitted=true,
+   node={"exitIP":"203.0.113.45","exitLocation":"JP Tokyo","latencyMs":865,"quality":"A"}
+```
+
+**为什么一直没人发现**：`admitTrusted` 会把任何失败都降级成一条警告加一个空数据的节点，而构建池子时所有 `manual` 条目一上来就被标成了 `ok`。于是池子看起来完全健康，实际上这些出口什么都没测过。
+
+后果是卡片里 `exitIP`、延迟、质量分永远为空，地区过滤和延迟门槛也从不生效。
+
+**路由本身不受影响**，因为 `dispatcher.ts` 里的 `exitProxyUri()` 有这个判断：
+
+```ts
+export function exitProxyUri(exitId: string, protocol: 'http' | 'socks5'): string {
+  const scheme = protocol === 'socks5' ? 'socks5' : 'http'
+  return PROXY_PROTOCOL_PREFIX.test(exitId) ? exitId : `${scheme}://${exitId}`
+}
+```
+
+两条路径对"地址里带不带前缀"的假设不一致，出错的只有 admission 这条。
+
+比较麻烦的是，**照文档写就必然踩中**：界面提示和校验正则都要求带 `http://`，插件自己的测试里也这么写。改成裸 `host:port` 虽然能修好探测，却又会被卡片校验判定非法，导致设置界面一直报错、任何改动都存不了。
+
+我提了 [issue #44](https://github.com/FishBottle7/opencode2dsh/issues/44)，附了完整复现和上游行号定位，建议的修法是复用已有的 `exitProxyUri`，让两条路径不会再漂移。
+
+**对你的影响**：插件探测数据为空属于已知问题，不影响实际请求走代理。
+
+---
+
+## 五、两个方法对比
+
+| 维度 | 方法一：插件 `@opencode2dsh/dsh-plugin` | 方法二：自建 `opencode2api` |
+| --- | --- | --- |
+| 适用客户端 | **仅 DSH** | 所有 OpenAI / Anthropic 兼容客户端 |
+| 上手时间 | 约 10 分钟 | 约 30 分钟 |
+| 部署方式 | 插件市场一键装 | 单文件 / Docker，要写配置 |
+| 额外进程 | 无 | 一个常驻进程加一个端口 |
+| 协议支持 | DSH 原生适配器（走 pi-ai） | Chat / Responses / Anthropic 三协议互译 |
+| 出口池配置 | `ipPool.manual` | `proxies.txt` |
+| 出口去重 | 需自行保证 | 需自行保证 |
+| 会话亲和 | SHA-256 派生会话 ID | `x-session-id` 或首条用户消息做种子 |
+| 故障转移 | 换出口重试（≤3 次）+ 直连兜底 | Key 池 + 代理池指数冷却 |
+| 可观测性 | 健康快照 + 设置卡片 | 完整管理界面（路由诊断、Playground、Token 统计），但建议关掉或只绑本机 |
+| 维护成本 | 等插件作者更新 | 等网关作者更新 |
+
+**共同点**：两者都受制于上游规则，都需要多个出口 IP 抗限流，都需要持续维护。
+
+### 混合使用示例
+
+DSH 的 profile 里可以同时注册两个 provider，共用同一批出口：
+
+```yaml
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      mygateway:                       # 走自建网关
+        api: openai-completions
+        baseURL: http://127.0.0.1:8080/v1
+        apiKeyEnv: MY_GATEWAY_KEY
+        models:
+          - id: space-bunny-free
+            name: space-bunny-free
+            contextWindow: 1048576
+- id: opencode2dsh
+  name: "@opencode2dsh/dsh-plugin"     # 走插件原生通道
+  config:
+    ipPool:
+      enabled: true
+      manual:
+        - http://127.0.0.1:24001
+      free:
+        enabled: false
+```
+
+共享同一批 `127.0.0.1:240xx` 出口，哪条路出问题都能立刻切到另一条。
+
+---
+
+## 六、实测的模型可用性
+
+写这篇文章时（2026 年 10 月）的实测结果。上游随时会变，这份表只能当参考。
+
+| 模型 | 结果 | 备注 |
+| --- | --- | --- |
+| `space-bunny-free` | 可用，1489ms | 第一个出口就成功，prompt cache 命中 |
+| `nemotron-3.5-lightning-free` | 可用，3481ms | 第一个出口就成功 |
+| `ling-3.1-flash-free` | 可用，25683ms | 换了 **18 个出口**才通 |
+| `mimo-v2.5-free` | 410 | 上游提示改用 `mimo-v2.6-flash-free` |
+| `deepseek-v4-flash-free` | 400 | 上游返回"模型不可用"（HTTP 状态码 400） |
+
+`ling` 那条的 `attempts: 18` 最能说明多出口池的价值。
+
+另外 `space-bunny-free` 的响应里带 `cached: 384`，说明会话亲和确实让 prompt cache 生效了。对长上下文对话来说，这直接关系到速度和账单。
+
+---
+
+## 七、风险提示
+
+这一节建议认真读完。
+
+- **可能违反服务条款。** OpenCode Zen 的 API 官方只允许在 OpenCode 自家 agent 里用。上面两条路本质上都是绕过这个限制，上游随时可能调整策略导致请求被拒甚至账号受限。请自行评估风险。
+- **匿名通道依赖流量伪装。** 插件和网关都在伪造官方 CLI 的请求头与流量特征。上游一旦加强识别就会失效，别指望一劳永逸。
+- **不要用公网免费代理。** 那等于把流量交给来路不明的第三方，既不稳定也有合规风险。用你自己的机场出口。
+- **管理端口别暴露公网。** opencode2api 的 WebUI 会暴露上游 Key 和代理凭据，`/api/config/reveal` 还能解密展示。它的模板默认监听地址是 `0.0.0.0:8081`，也就是**默认对整个网络开放**——所以第 4.3 步直接建议关掉它。如果一定要用，务必挂反向代理、上 HTTPS、并限制来源 IP。
+- **出口 IP 会变。** 机场订阅刷新后 easy-proxies 会重新分配端口，**端口号背后的节点会变**。建议定期重跑出口探测脚本。
+
+---
+
+## 八、结语
+
+这整套东西折腾下来，我最大的感受是：**免费的东西维护成本都藏在看不见的地方**。
+
+要处理的东西比想象中多：协议互译、出口去重、IP 限流、DNS 解析、缓存亲和、上游风控变化，还有一堆不会报错的静默失败。上面那六个坑里，最难缠的是安静失败的那类——池子显示健康、出口显示正常、请求看起来也成功，实际背后什么都没测过。
+
+真要说有什么心得，大概是两条：
+
+1. **任何"健康状态"都要自己去验证一遍。** 那句 `state: "ok"` 可能只代表"程序构造它的时候标成了 ok"，跟真实可用性没关系。
+2. **出口池先探测再配置。** 32 个节点里只有 28 个独立出口、5 个是同一台服务器、还有 1 个名字写荷兰实际在德国——这些光看配置文件永远看不出来。
+
+---
+
+## 参考
+
+- [opencode2api](https://github.com/jasonxu114514/opencode2api) — Go 写的 OpenCode Zen / Go API 网关
+- [opencode2api 诞生记](https://blog.jasonxu.xyz/post/9515edf5) — 作者复盘，讲了协议转换和上游猫鼠游戏的完整过程，值得一读
+- [@opencode2dsh/dsh-plugin](https://github.com/FishBottle7/opencode2dsh) — DSH 的 OpenCode Zen 原生适配器插件
+- [issue #44](https://github.com/FishBottle7/opencode2dsh/issues/44) — 本文坑六的完整复现与定位
+- [easy-proxies](https://github.com/daimon3332/easy-proxies) — 基于 sing-box 的订阅导入 + 多端口网关
+- [Mihomo listeners 文档](https://wiki.metacubex.one/config/inbound/listeners/) — 另一条"一个节点一个本地端口"的路子
+
+---
+
+*文中的端口、延迟、出口 IP 数量均为本机实测，不代表普遍情况。*

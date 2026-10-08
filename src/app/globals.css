@@ -227,6 +227,53 @@ html {
 }
 
 /* ============================================================================
+   滚动条
+
+   Edge/Chrome 的默认滚动条又粗又灰，和极简风格冲突。全站统一成细线：
+   Firefox 用 scrollbar-width / scrollbar-color，
+   Chromium 系用 ::-webkit-scrollbar 系列。
+
+   滑块默认用最浅的边框色，悬停才显色，避免静止时抢视线。
+   ========================================================================= */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.15s ease;
+}
+
+/* 只有悬停到滚动容器上时才显色 */
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ============================================================================
    代码块
    高亮由构建期的 Shiki 完成（见 next.config.ts），颜色写在 CSS 变量里。
    ========================================================================= */
@@ -239,7 +286,7 @@ html {
 .code-block pre {
   /* 覆盖 .prose pre 的默认样式：这里需要为工具条留出顶部空间 */
   margin: 0;
-  /* 底部 1.5rem 给横向滚动条留出空间，避免滚动条紧贴最后一行代码 */
+  /* 底部留 1.5rem 给横向滚动条，滚动条才不会紧贴最后一行代码 */
   padding: 2.6rem 1.25rem 1.5rem;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -247,38 +294,6 @@ html {
   overflow-x: auto;
   line-height: 1.7;
   position: relative;
-
-  /* 细滚动条：Edge/Chrome 默认样式又粗又灰，和极简风格冲突。
-     ::-webkit-scrollbar 管 Chromium 系，scrollbar-* 管 Firefox。 */
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
-.code-block pre::-webkit-scrollbar {
-  height: 8px;
-}
-
-.code-block pre::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* 滑块：默认低调，悬停代码块时才显出颜色，避免视觉噪音 */
-.code-block pre::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-  transition: background-color 0.15s ease;
-}
-
-.code-block pre:hover::-webkit-scrollbar-thumb {
-  background: var(--muted);
-  background-clip: content-box;
-}
-
-.code-block pre::-webkit-scrollbar-thumb:hover {
-  background: var(--secondary);
-  background-clip: content-box;
 }
 
 .code-block pre:focus-visible {
@@ -426,7 +441,7 @@ html {
    页面切换过渡（View Transitions）
    配合 components/page-transition.tsx 使用。
 
-   动效很克制：淡入淡出+ 几像素的垂直位移，180ms。
+   动效很克制：旧内容先淡出，新内容再淡入，顺序衔接而不是叠加。
    顶栏/底栏不在 <ViewTransition> 里，切换时不会动。
    ========================================================================= */
 
@@ -444,20 +459,32 @@ html {
 }
 
 @keyframes page-fade-out {
+  from {
+    opacity: 1;
+  }
   to {
     opacity: 0;
-    transform: translateY(-2px);
   }
 }
 
-/* 新内容进入 */
+/**
+ * 新内容进入：延迟 140ms 开始，正好接在旧内容淡出之后。
+ *
+ * 这一步是解决「残留内容异常闪烁」的关键。之前两个动画是**同时**跑的
+ * （都在 0ms 开始），于是整个过渡期间页面上始终叠着两层半透明内容——
+ * 旧页面正在消失、新页面正在出现，视觉上就是闪烁和重影。
+ *
+ * 让旧内容先淡完（140ms）、新内容再淡入（130ms），任一时刻只有一层可见。
+ */
 ::view-transition-new(page) {
-  animation: page-fade-in 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: page-fade-in 130ms 140ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
-/* 旧内容退出 */
+/* 旧内容退出：独占前 140ms，这段时间新内容还没开始出现。
+   fill-mode: both 保证淡出完成后停在 opacity:0，
+   不会残留最后一帧和新页面重叠。 */
 ::view-transition-old(page) {
-  animation: page-fade-out 140ms cubic-bezier(0.4, 0, 1, 1);
+  animation: page-fade-out 140ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 /* 链接点击反馈：等待导航完成期间压暗，给出即时的「收到了」信号。

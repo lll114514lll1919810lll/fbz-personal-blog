@@ -28,6 +28,28 @@ const components: MDXComponents = {
       {children}
     </CodeBlock>
   ),
+
+  /**
+   * 外链一律在新标签页打开。
+   *
+   * 技术博客的参考链接多是外部文档/GitHub 仓库，直接跳走会丢失阅读位置，
+   * 而读者的意图通常是「看一眼就回来」。同时补 rel：
+   * noopener 防止目标页通过 window.opener 反向操纵本页，
+   * noreferrer 避免把访客来源泄漏给对方。
+   */
+  a: ({ href, children, ...props }) => {
+    const isExternal = typeof href === "string" && /^https?:\/\//.test(href);
+    return (
+      <a
+        {...props}
+        href={href}
+        target={isExternal ? "_blank" : undefined}
+        rel={isExternal ? "noopener noreferrer" : undefined}
+      >
+        {children}
+      </a>
+    );
+  },
 };
 
 export function useMDXComponents(): MDXComponents {
