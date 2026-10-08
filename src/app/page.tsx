@@ -54,7 +54,7 @@ export default function HomePage() {
             {posts.length > 0 && (
             <Link
               href="/blog"
-              className="text-sm text-muted transition-colors hover:text-foreground"
+              className="button-quiet"
             >
               查看全部 →
             </Link>

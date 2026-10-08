@@ -343,6 +343,50 @@
     transform: translateY(-1px);
   }
 
+  /**
+   * 次要按钮：会直接躺在背景图上的那种（比如首页的「查看全部」）。
+   *
+   * 必须自己带底。实测把 --muted 文字直接放在首页背景图上，
+   * 最差只有 1.02:1（压在图里那块亮紫色 #9a82bf 上），文字基本消失。
+   * 照片里有什么颜色完全不可控，只有给文字一层自己的底，对比度才不随图片走。
+   *
+   * 底的不透明度是量出来的，不是拍的：
+   *   --panel-bg(0.72)      → 深底被亮图抬起，最差 3.4:1  ✗
+   *   --panel-bg-strong(0.88)→ 最差 3.57:1（实测于 scrollY=0）✗
+   *   0.94                  → 最差 6.9:1 ✓
+   * 比理论值难，是因为 backdrop-filter 的 saturate(1.8) 会把图里紫色的通道推高，
+   * blur(14px) 又把周围更亮的部分卷到文字下面，实际底比纯 alpha 合成算出来的亮。
+   *
+   * 文字用 --secondary（悬停提到 --foreground）：在 0.94 的底上，
+   * 即使图片某处接近纯白也只有 6.9:1，留足余量；--muted 则只有 5.2:1。
+   */
+  .button-quiet {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 2rem; /* 32px 触控热区 */
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--background) 94%, transparent);
+    /* 边框用不透明的 --border（不是 --panel-border 那种 0.07 的透明边）：
+       浅色模式下底是白 0.94 压在白页面上，只有这条边能把胶囊勾出来，
+       和 .tag-chip 用同一套做法 */
+    border: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 var(--panel-highlight);
+    backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+    color: var(--secondary);
+    font-size: 0.875rem;
+    transition:
+      color 180ms ease,
+      border-color 180ms ease,
+      background-color 180ms ease;
+  }
+
+  .button-quiet:hover {
+    color: var(--foreground);
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--panel-border));
+  }
+
   .tag-chip {
     border: 1px solid var(--border);
     border-radius: 999px;
@@ -581,7 +625,8 @@
   @supports not (backdrop-filter: blur(1px)) {
     .panel,
     .panel-strong,
-    .panel-raised {
+    .panel-raised,
+    .button-quiet {
       background-color: var(--background);
     }
   }
@@ -593,7 +638,8 @@
   @media (prefers-reduced-transparency: reduce) {
     .panel,
     .panel-strong,
-    .panel-raised {
+    .panel-raised,
+    .button-quiet {
       background-color: var(--background);
       backdrop-filter: none;
     }
