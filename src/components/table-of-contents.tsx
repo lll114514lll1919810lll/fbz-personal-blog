@@ -434,12 +434,16 @@ function Collapsible({ items }: { items: TocItem[] }) {
   };
 
   return (
-    <>
+    /* 标题行和展开内容装在同一个面板里，整块只有一圈圆角。
+       原来是两个面板（标题一个 .panel、列表一个 .panel-raised .rounded-lg）
+       上下紧贴，展开时接缝两侧会各露出一个内凹的弧度，
+       看起来像两块圆角硬拼在一起，而不是一个可折叠的面板。 */
+    <div className="panel">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="panel flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
+        className="flex w-full items-center justify-between px-4 py-2.5 text-sm"
       >
         <span className="font-medium">本文目录</span>
         <span className="flex items-center gap-2 text-xs text-muted">
@@ -470,7 +474,9 @@ function Collapsible({ items }: { items: TocItem[] }) {
         }`}
       >
         <ul className="overflow-hidden">
-          <li className="panel-raised panel rounded-lg p-3">
+          {/* 分隔线不用跟着 open 切换：收起时整个区域 opacity-0，
+              而且高度被裁成 0，画不出来 */}
+          <li className="border-t border-panel-edge p-3">
             <ul className="space-y-0.5">
               {tree.map((node) => {
             const hasChildren = node.children.length > 0;
@@ -579,6 +585,6 @@ function Collapsible({ items }: { items: TocItem[] }) {
           </li>
         </ul>
       </div>
-    </>
+    </div>
   );
 }
