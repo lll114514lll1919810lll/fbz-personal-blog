@@ -135,8 +135,12 @@ function Sidebar({ items }: { items: TocItem[] }) {
         按 CSS 规范 overflow-x 会从 visible 被计算成 auto，
         于是任何一点点横向溢出（长英文单词、代码标识符）都会在底部
         冒出一条横向滚动条。显式关掉它。
+
+        scrollbar-gutter:stable 也不能省：展开分组后内容变长才出现滚动条，
+        滚动条会占掉约 10px 内容宽度，文字区跟着变窄——展开收起时
+        整块文字左右跳动。stable 让这段空间始终预留，文字宽度不再变。
       */
-      className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto overflow-x-hidden pl-1"
+      className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto overflow-x-hidden pl-1 [scrollbar-gutter:stable]"
     >
       <p className="mb-3 pl-4 text-xs font-medium tracking-wide text-muted">
         本文目录
