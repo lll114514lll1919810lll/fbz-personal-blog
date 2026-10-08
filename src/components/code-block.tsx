@@ -108,7 +108,7 @@ export function CodeBlock({
               aria-label={collapsed ? "展开代码" : "折叠代码"}
               className="code-block-action code-block-fold"
             >
-              <ChevronIcon up={collapsed} />
+              <ChevronIcon up={!collapsed} />
               {collapsed ? "展开" : "折叠"}
             </button>
           )}
@@ -158,7 +158,9 @@ export function CodeBlock({
   );
 }
 
-/** 折叠 / 展开的箭头：展开态朝下（点了收起），折叠态朝上（点了展开） */
+/** 折叠 / 展开的箭头：箭头方向跟着按钮文案走。
+ *  展开态标着「折叠」，箭头朝上（收起 = 往上收）；
+ *  折叠态标着「展开」，箭头朝下（展开 = 往下放）。 */
 function ChevronIcon({ up }: { up: boolean }) {
   return (
     <svg

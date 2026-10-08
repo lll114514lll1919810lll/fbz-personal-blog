@@ -1252,7 +1252,7 @@ html {
   align-items: center;
   justify-content: center;
   gap: 0.3rem;
-  /* min-height 32px：按钮平时是透明的，撑高只扩大点击热区，
+  /* min-height 32px：按钮底色是透明的，撑高只扩大点击热区，
      视觉上图标文字大小不变。手机上一根手指点得准。 */
   min-height: 32px;
   padding: 0.25rem 0.6rem;
@@ -1264,31 +1264,15 @@ html {
   line-height: 1;
   font-family: inherit;
   cursor: pointer;
-  opacity: 0;
   transition:
-    opacity 0.15s ease,
     color 0.15s ease,
     background-color 0.15s ease,
     border-color 0.15s ease;
 }
 
-/* 键盘用户没有 hover，用 :focus-within 让它始终可见 */
-.code-block:focus-within .code-block-action {
-  opacity: 1;
-}
-
-@media (hover: hover) {
-  .code-block:hover .code-block-action {
-    opacity: 1;
-  }
-}
-
-/* 收起状态下折叠按钮常驻。这时候它是唯一的展开入口，
-   再跟着 hover 一起消失，读的人就找不回来了。 */
-.code-block.is-collapsed .code-block-fold {
-  opacity: 1;
-}
-
+/* 按钮常驻，不靠 hover 才浮现。
+   折叠和复制都是需要主动去找的功能，藏起来等于让大部分人不知道它们存在；
+   默认只给 --muted 的颜色，不跟代码抢注意力，悬停时才浮出底色和边框。 */
 .code-block-action:hover {
   color: var(--foreground);
   background: var(--background);
