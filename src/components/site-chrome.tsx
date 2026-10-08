@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CONTENT_MAX_WIDTH, navLinks, siteConfig } from "@/lib/site";
 import { LinkPending } from "@/components/link-pending";
 import { SiteLogo } from "@/components/site-logo";
+import { SiteSearch } from "@/components/site-search";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
@@ -50,6 +51,10 @@ export function SiteHeader() {
               </Link>
             ))}
           </nav>
+
+          {/* 搜索放在开关左边。两者都自带 44px 热区，
+              间距靠 gap-3/sm:gap-4，不需要额外内边距 */}
+          <SiteSearch />
 
           {/* 开关自带 44px 热区，左右不用再加间距把热区撑开 */}
           <ThemeToggle />

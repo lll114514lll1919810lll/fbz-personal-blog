@@ -1403,3 +1403,165 @@ html {
     animation-delay: 0s !important;
   }
 }
+
+/* ============================================================================
+   站内搜索
+
+   索引是构建期的静态 JSON（/search-index.json），客户端只负责匹配和渲染。
+   面板沿用亚克力令牌，和图片预览一样用原生 <dialog>（top layer，
+   不受正文面板 backdrop-filter 造成的 fixed 包含块影响）。
+   ============================================================================ */
+
+.site-search-trigger {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+  transition: color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.site-search-trigger:hover {
+  color: var(--foreground);
+}
+
+.site-search {
+  margin: 8vh auto auto;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-panel);
+  background: var(--panel-bg-strong);
+  backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
+  box-shadow: var(--panel-shadow);
+  color: var(--foreground);
+  width: min(92vw, 40rem);
+  max-height: 76vh;
+  overflow: hidden;
+}
+
+.site-search::backdrop {
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.site-search[open] {
+  animation: search-in 180ms ease-out;
+}
+
+@keyframes search-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.site-search-box {
+  display: flex;
+  flex-direction: column;
+  max-height: 76vh;
+}
+
+.site-search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.site-search-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.site-search-field input::placeholder {
+  color: var(--muted);
+}
+
+/* 关掉 type=search 在 WebKit 下的默认清除按钮，样式不统一 */
+.site-search-field input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.site-search-kbd {
+  flex: none;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.site-search-results {
+  /* min-height: 0 才能让 flex 子项真正收缩并出现滚动条 */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.site-search-hint {
+  margin: 0;
+  padding: 1.1rem 1rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.8;
+}
+
+.site-search-list {
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+}
+
+.site-search-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  transition: background-color 140ms ease;
+}
+
+.site-search-item[data-active="true"] {
+  background: var(--accent-soft);
+}
+
+.site-search-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.site-search-meta {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.site-search-snippet {
+  color: var(--secondary);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.site-search-snippet mark {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}
