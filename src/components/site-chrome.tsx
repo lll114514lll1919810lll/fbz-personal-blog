@@ -34,7 +34,10 @@ export function SiteHeader() {
 
         {/* 开关放在 nav 外面：它是站点控件，不是导航链接，
             混进去会让读屏在「导航」这一块里念到它 */}
-        <div className="flex items-center">
+        {/* gap 给导航和开关之间留出分组间距。链接之间是 12px（sm:gap-3），
+            这里 12/16px 略大一点，让开关看起来是另一组东西；
+            移动端只能给到 12px，再宽会在 375px 上把顶栏挤溢出 */}
+        <div className="flex items-center gap-3 sm:gap-4">
           <nav className="-my-2 flex items-center text-[13px] sm:gap-3">
             {navLinks.map((link) => (
               <Link
