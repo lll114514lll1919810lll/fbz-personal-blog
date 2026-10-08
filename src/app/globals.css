@@ -1089,6 +1089,16 @@ html {
   font-size: 0.95rem;
 }
 
+/* 表格的横向滚动容器（由 mdx-components.tsx 的 table 映射套上）。
+   width:100% 只是期望宽度，表格不会收缩到 min-content 以下——
+   某一列内容一长就会撑破正文列，进而在窄屏上引发整页横向溢出，
+   表现为顶栏和阅读进度条右侧「断开」。
+   这里把溢出限制在容器内部，桌面端无溢出时观感不变。 */
+.prose .table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .prose th {
   background: var(--surface);
   color: var(--secondary);
