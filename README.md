@@ -91,7 +91,8 @@ export const metadata = {
 ## 设计说明
 
 整体走**极简约束**路线：近乎单色的中性灰阶，全站只用一种强调蓝，
-靠留白和细分割线组织信息，不做阴影和多色装饰。明暗两套配色跟随系统。
+靠留白和细分割线组织信息，不做阴影和多色装饰。明暗两套配色默认跟随系统，
+顶栏右侧的开关可以手动覆盖。
 
 三个交互特性：
 
@@ -107,8 +108,9 @@ export const metadata = {
 | 回到顶部 | `back-to-top.tsx` | 文章页右下角，滚过一屏后出现 |
 | 目录动效 | `table-of-contents.tsx` | 展开/收起高度过渡，子项错峰滑入 |
 | 缓动滚动 | `lib/scroll.ts` | 点击目录缓动滚到锚点，侧栏内部跟随 |
-| 代码高亮 | `next.config.ts` + Shiki | 构建期高亮，明暗双主题跟随系统，零客户端 JS |
+| 代码高亮 | `next.config.ts` + Shiki | 构建期高亮，明暗双主题跟随主题开关，零客户端 JS |
 | 代码块交互 | `code-block.tsx` | 复制按钮、语言标签、横向滚动渐变提示 |
+| 明暗切换 | `theme-toggle.tsx` + `lib/use-theme.ts` | 顶栏右侧开关；默认跟随系统，手动选择存 localStorage，刷新不闪白 |
 
 改配色只需动 `globals.css` 顶部的 CSS 变量，明暗两套值一一对应。
 
@@ -160,6 +162,39 @@ export const metadata = {
 无障碍：`prefers-reduced-transparency: reduce` 下退化成实色面板；
 不支持 `backdrop-filter` 的浏览器同理（`@supports` 兜底）。
 
+### 明暗主题
+
+配色改动只有一个入口：`globals.css` 顶部那两组 CSS 变量（浅色在 `:root`，
+深色跟着主题走）。改一处记得看下面的「两处深色令牌」。
+
+主题有两个来源，优先级是**手动选择 > 系统偏好**：
+
+| 通道 | 触发方式 | 实现 |
+| --- | --- | --- |
+| 系统偏好 | 用户没点过开关 | `@media (prefers-color-scheme: dark)` |
+| 手动选择 | 点顶栏开关 | `<html data-theme="light\|dark">` + localStorage |
+
+**为什么状态放在 `<html>` 的属性上而不是 React 里**：内联引导脚本
+（`lib/theme.ts` 里的 `THEME_INIT_SCRIPT`，被 `layout.tsx` 内联进 `<head>`）
+在浏览器解析 HTML、**首次绘制之前**就把 `data-theme` 和 `color-scheme` 写好了，
+CSS 直接出效果。如果让 React 状态决定外观，服务端只能渲染一种主题，
+选了深色的用户每次刷新都会先闪一帧白底。React 那边只负责 `aria-checked`
+和点击——开关滑块的位置也是 CSS 按属性算的，两边不会打架。
+
+脚本必须放在 `<head>`：放在 body 里虽然也早于首次绘制，但如果 React 在
+客户端导航时用 JS 插入它，脚本不会执行。`<html>` 上加了
+`suppressHydrationWarning`，因为脚本改的属性 JSX 里没有，React 水合时会当成不一致。
+
+开关本体（`theme-toggle.tsx`）：按钮是 44×44 的触控热区，里面才是 44×24 的胶囊轨道，
+滑块和图标都复用现有令牌（轨道 `--border`、滑块 `--foreground`、当前主题的图标反白），
+没有引入新颜色。
+
+**两处深色令牌**：CSS 没有语法能把同一个声明块同时挂在媒体查询和属性选择器上，
+所以 `globals.css` 里深色令牌写了两遍（各带注释标了「第一份 / 第二份」），
+要改配色必须同时改。代码高亮的 Shiki 双主题规则同理，也是两份。
+
+`prefers-reduced-motion: reduce` 下滑块动画自动归零（全局规则覆盖）。
+
 ### 页面切换过渡
 
 用 React 19.2 canary 的 `<ViewTransition>` 实现，App Router 路由切换本身就是
@@ -197,14 +232,13 @@ CSS 里还处理了两个容易被忽略的点：
 不加载任何客户端 JS。
 
 **明暗双主题**：`next.config.ts` 里设了 `defaultColor: false`，Shiki 会给每个 token
-同时写出 `--shiki-light` 和 `--shiki-dark` 两套颜色，由 CSS 按系统配色选用：
+同时写出 `--shiki-light` 和 `--shiki-dark` 两套颜色，由 CSS 按当前主题选用
+（浅色是默认值，深色有「系统偏好」和「手动选择」两个入口，见上面的明暗主题一节）：
 
 ```css
-@media (prefers-color-scheme: light) {
-  .code-block pre[data-theme*=" "],
-  .code-block pre[data-theme*=" "] span {
-    color: var(--shiki-light);
-  }
+.code-block pre[data-theme*=" "],
+.code-block pre[data-theme*=" "] span {
+  color: var(--shiki-light);
 }
 ```
 

@@ -4,7 +4,7 @@
    设计基调：极简约束 + 圆角亚克力面板
    - 近乎单色的中性灰阶，只有「一个」饱和色用于交互提示（链接、目录高亮）
    - 所有内容面板是半透明毛玻璃（亚克力），圆角，浮在背景图上
-   - 明暗两套配色跟随系统，色值一一对应
+   - 明暗两套配色：默认跟随系统，顶栏开关可以手动覆盖，色值一一对应
 
    两套灰色的分工（括号内为实测对比度，正文需满足 WCAG AA 4.5:1）：
    --secondary  承载需要读清的次级信息：摘要、元信息
@@ -15,7 +15,28 @@
    同时保证文字可读。
    ========================================================================= */
 
+/* ----------------------------------------------------------------------------
+   主题切换的两个通道
+
+   1. 系统偏好：@media (prefers-color-scheme: dark)。没有任何 JS 时也生效，
+      这是「默认跟随系统」。
+   2. 手动指定：<html data-theme="dark|light">，由顶栏开关写入、并存进
+      localStorage。内联引导脚本会在首次绘制前把属性写好（见 lib/theme.ts）。
+
+   两者必须能互相压制，所以深色令牌写了两遍：媒体查询那份排除掉
+   [data-theme="light"]（手动选浅色要能压过深色系统），属性那份负责
+   「系统浅色但手动选深色」。
+   CSS 没有语法能把同一个声明块同时挂在媒体查询和属性选择器上，
+   所以**改配色时下面两处深色令牌必须一起改**。
+
+   另外 color-scheme 也一起跟着走：浏览器据此渲染滚动条、表单控件、
+   超范围画布。手动切换时脚本会把 color-scheme 内联写到 <html> 上，
+   内联样式优先级最高，所以能盖掉这里的值。
+   ------------------------------------------------------------------------- */
+
 :root {
+  color-scheme: light;
+
   --background: #ffffff;
   --surface: #fafafa; /* 面板内部的浅底：行内代码、表头 */
   --foreground: #171717;
@@ -46,8 +67,12 @@
   --bg-image: none;
 }
 
+/* 深色令牌（第一份）：跟随系统。
+   :not([data-theme="light"]) 保证手动选的浅色能压过深色的系统偏好。 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
     --background: #09090b;
     --surface: #131316;
     --foreground: #ededed;
@@ -65,6 +90,27 @@
     --panel-highlight: rgb(255 255 255 / 0.06);
     --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
   }
+}
+
+/* 深色令牌（第二份）：手动指定。上面那份改了这里也要改。 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #09090b;
+  --surface: #131316;
+  --foreground: #ededed;
+  --secondary: #a1a1aa; /* 7.76:1 */
+  --muted: #8b8b94; /* 5.89:1 */
+  --border: #26262a;
+  --accent: #60a5fa;
+  --accent-soft: #172033;
+
+  --panel-bg: rgb(22 22 26 / 0.74);
+  --panel-bg-strong: rgb(22 22 26 / 0.88);
+  --panel-bg-raised: rgb(30 30 36 / 0.62);
+  --panel-border: rgb(255 255 255 / 0.09);
+  --panel-highlight: rgb(255 255 255 / 0.06);
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
 }
 
 @theme inline {
@@ -123,6 +169,113 @@
   /** 内嵌面板：代码块、标签这类叠在别的面板之上的小面板 */
   .panel-raised {
     background-color: var(--panel-bg-raised);
+  }
+
+  /* ==========================================================================
+     明暗切换开关（顶栏右侧）
+
+     结构：按钮(44×44 命中区) > 轨道(44×24 胶囊) > 左右两枚图标 + 圆形滑块。
+     滑块停在左边 = 浅色，右边 = 深色。
+
+     按钮做成 44×44、轨道只是它居中的一个子元素，是为了让手指点得准：
+     触控热区最小 44px 是标准，而视觉上开关只有 24px 高。
+     焦点框画在按钮上，按钮也是圆的，所以不会出现一个方形框套住胶囊。
+
+     滑块位置由 CSS 根据 <html data-theme> 决定，而不是由 React 状态决定。
+     原因：内联脚本在首次绘制前就写好了 data-theme，样式能立刻跟上；
+     如果让 JS 状态决定位置，服务端只能渲染「浅色」这一种，
+     深色用户会看到滑块先停在左边再跳过去。
+
+     配色全部复用现有令牌，不引入新颜色：
+       轨道 = --border（浅色下是浅灰、深色下是深灰，两边都刚好比面板深一点）
+       滑块 = --foreground（永远是与背景对比最强的那个色，两端都清楚）
+       当前主题的图标 = --background（反白，压在滑块上）；
+       另一枚 = --muted。
+     ========================================================================== */
+
+  .theme-switch {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    place-items: center;
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .theme-switch-track {
+    position: relative;
+    display: inline-flex;
+    width: 2.75rem; /* 44px */
+    height: 1.5rem; /* 24px */
+    /* 内边距必须和滑块的 top/left 一致：两枚图标各占 20px，
+       正好填满 44-2×2=40px 的内容盒，图标中心才会和滑块中心重合。
+       漏掉这条时图标会从轨道边缘开始排，与滑块差 2px（实测出来的）。 */
+    padding: 0.125rem;
+    border-radius: 999px;
+    background-color: var(--border);
+    /* 内凹阴影给轨道「槽」的感觉，让滑块看起来是嵌在里面的 */
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+    transition: background-color 200ms ease;
+  }
+
+  .theme-switch-knob {
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 1.25rem; /* 20px */
+    height: 1.25rem;
+    border-radius: 999px;
+    background-color: var(--foreground);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.28);
+    /* 滑动是这枚开关唯一的主要动效，给足时长才看得出「拨过去」的意味 */
+    transition: transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  .theme-switch-icon {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: 1.25rem;
+    height: 1.25rem;
+    place-items: center;
+    color: var(--muted);
+    transition: color 200ms ease;
+  }
+
+  /* 默认（浅色）状态：滑块在左，太阳反白压在上面 */
+  .theme-switch-sun {
+    color: var(--background);
+  }
+
+  /* 深色状态（第一份）：跟随系统。没有 data-theme 属性时才看系统偏好 */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .theme-switch-knob {
+      transform: translateX(1.25rem);
+    }
+
+    :root:not([data-theme]) .theme-switch-sun {
+      color: var(--muted);
+    }
+
+    :root:not([data-theme]) .theme-switch-moon {
+      color: var(--background);
+    }
+  }
+
+  /* 深色状态（第二份）：手动指定 */
+  :root[data-theme="dark"] .theme-switch-knob {
+    transform: translateX(1.25rem);
+  }
+
+  :root[data-theme="dark"] .theme-switch-sun {
+    color: var(--muted);
+  }
+
+  :root[data-theme="dark"] .theme-switch-moon {
+    color: var(--background);
   }
 
   /**
@@ -539,22 +692,28 @@ html {
    github-light 是纯白、github-dark 是 #24292e，
    直接用会让代码块和站点的 --surface 脱节、破坏整体配色。
    切换配色纯靠 CSS，无 JS、无闪烁。
+
+   这里同样要跟上面主题的两个通道对齐：浅色是默认值，深色既要能被
+   系统偏好触发，也要能被 data-theme 手动触发。
    ---------------------------------------------------------------------- */
 
-@media (prefers-color-scheme: light) {
-  .code-block pre[data-theme*=" "],
-  .code-block pre[data-theme*=" "] span {
-    color: var(--shiki-light);
+.code-block pre[data-theme*=" "],
+.code-block pre[data-theme*=" "] span {
+  color: var(--shiki-light);
+}
+
+/* 深色（第一份）：跟随系统 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .code-block pre[data-theme*=" "],
+  :root:not([data-theme="light"]) .code-block pre[data-theme*=" "] span {
+    color: var(--shiki-dark);
   }
 }
 
-/* 深色下 Shiki 把颜色写进 --shiki-dark，同样需要显式应用到 color，
-   否则 span 会继承 pre 的前景色，代码全部同色。 */
-@media (prefers-color-scheme: dark) {
-  .code-block pre[data-theme*=" "],
-  .code-block pre[data-theme*=" "] span {
-    color: var(--shiki-dark);
-  }
+/* 深色（第二份）：手动指定 */
+:root[data-theme="dark"] .code-block pre[data-theme*=" "],
+:root[data-theme="dark"] .code-block pre[data-theme*=" "] span {
+  color: var(--shiki-dark);
 }
 
 /* 行内代码：用 :not(pre) 精确排除代码块内部的 code，

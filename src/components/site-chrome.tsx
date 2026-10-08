@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CONTENT_MAX_WIDTH, navLinks, siteConfig } from "@/lib/site";
 import { LinkPending } from "@/components/link-pending";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * 顶栏底栏共用的样式：通栏、直角、保留毛玻璃。
@@ -31,17 +32,24 @@ export function SiteHeader() {
           {siteConfig.name}
         </Link>
 
-        <nav className="-my-2 flex items-center text-[13px] sm:gap-3">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="flex items-center py-3 text-secondary transition-colors hover:text-foreground sm:py-2"
-            >
-              <LinkPending>{link.label}</LinkPending>
-            </Link>
-          ))}
-        </nav>
+        {/* 开关放在 nav 外面：它是站点控件，不是导航链接，
+            混进去会让读屏在「导航」这一块里念到它 */}
+        <div className="flex items-center">
+          <nav className="-my-2 flex items-center text-[13px] sm:gap-3">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="flex items-center py-3 text-secondary transition-colors hover:text-foreground sm:py-2"
+              >
+                <LinkPending>{link.label}</LinkPending>
+              </Link>
+            ))}
+          </nav>
+
+          {/* 开关自带 44px 热区，左右不用再加间距把热区撑开 */}
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

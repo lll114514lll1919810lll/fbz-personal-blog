@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx scripts/test-toc.ts",
+    "test:theme": "node scripts/check-theme.cjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
