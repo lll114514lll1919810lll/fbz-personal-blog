@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TocItem } from "@/lib/posts";
-import { scrollIntoViewIfNeeded, scrollToAnchor } from "@/lib/scroll";
+import {
+  getScrollLock,
+  scrollIntoViewIfNeeded,
+  scrollToAnchor,
+} from "@/lib/scroll";
 import { useActiveHeading } from "./use-active-heading";
 
 /**
@@ -134,13 +138,26 @@ function Sidebar({ items }: { items: TocItem[] }) {
     // 「之前章节自动收起，无视用户是否手动展开过」
     setManualId(null);
 
-    // 上一章如果当时是展开的，先标记为待收起，交给下面的定时器延后处理
+    /**
+     * 只有「点击目录跳转」引起的切换才延迟收起。
+     *
+     * 正常滚动页面时章节变化必须即时响应——高亮已经跟手移到新章节了，
+     * 展开状态却慢半拍才跟上，会让人以为目录卡了。
+     *
+     * 跳转期间滚动锁是开着的（lib/scroll.ts），据此区分两种来源。
+     */
+    const fromJump = getScrollLock() !== null;
+
     if (
+      fromJump &&
       previous !== null &&
       previous !== activeGroupId &&
       previous !== manualId
     ) {
       setClosingId(previous);
+    } else if (!fromJump) {
+      // 滚动引起的变化：立刻收起，不留待收起状态
+      setClosingId(null);
     }
   }
 
@@ -382,8 +399,8 @@ function Collapsible({ items }: { items: TocItem[] }) {
   );
   const activeGroupId = activeNode?.id ?? null;
 
-  // 与桌面端同一套规则：章节变了就清掉手动展开项，
-  // 并把旧章节标为待收起（延后到新章节展开动画结束再收）
+  // 与桌面端同一套规则：章节变了就清掉手动展开项；
+  // 只有点击跳转引起的变化才延迟收起，正常滚动即时收起
   const [closingId, setClosingId] = useState<string | null>(null);
   const [prevActiveGroup, setPrevActiveGroup] = useState<string | null>(null);
   if (activeGroupId !== prevActiveGroup) {
@@ -391,12 +408,17 @@ function Collapsible({ items }: { items: TocItem[] }) {
     setPrevActiveGroup(activeGroupId);
     setManualId(null);
 
+    const fromJump = getScrollLock() !== null;
+
     if (
+      fromJump &&
       previous !== null &&
       previous !== activeGroupId &&
       previous !== manualId
     ) {
       setClosingId(previous);
+    } else if (!fromJump) {
+      setClosingId(null);
     }
   }
 
