@@ -20,6 +20,71 @@ export function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/* ------------------------------------------------------------ 滚动锁 --- */
+
+/**
+ * 程序化缓动滚动期间的「目标锚点」。
+ *
+ * 为什么需要它：缓动滚动会让页面依次经过起点到终点之间的每一个章节，
+ * 如果高亮照常跟随，侧栏的高亮就会从上到下一项项刷过去，
+ * 中间的自动展开也跟着触发一遍——动静极大，正是用户反馈的问题。
+ *
+ * 锁住之后高亮直接跳到目标项，中间章节不再参与。
+ */
+let lockedId: string | null = null;
+const lockListeners = new Set<() => void>();
+
+function notifyLock() {
+  for (const listener of lockListeners) listener();
+}
+
+/** 供 useSyncExternalStore 订阅 */
+export function subscribeScrollLock(callback: () => void) {
+  lockListeners.add(callback);
+  return () => lockListeners.delete(callback);
+}
+
+/** 当前锁定的锚点；未锁定时返回 null */
+export function getScrollLock(): string | null {
+  return lockedId;
+}
+
+/** 服务端渲染时没有滚动状态 */
+export function getScrollLockServer(): string | null {
+  return null;
+}
+
+/** 滚动是否处于锁定状态（高亮应暂停跟随） */
+export function isScrollLocked(): boolean {
+  return lockedId !== null;
+}
+
+/** 是否正在执行程序化滚动（此时忽略 scroll 事件） */
+let programmatic = false;
+
+/**
+ * 用户在锁定期间自己滚动了，就解锁，让高亮恢复跟随。
+ *
+ * 用 scroll 事件而不是 wheel/touch：拖滚动条、按空格、点滚动条轨道
+ * 都不会触发 wheel，但都会触发 scroll。程序化滚动期间用 programmatic
+ * 标志忽略掉自己产生的事件。
+ */
+let userScrollArmed = false;
+function armUserScrollUnlock() {
+  if (userScrollArmed) return;
+  userScrollArmed = true;
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!programmatic && lockedId !== null) {
+        lockedId = null;
+        notifyLock();
+      }
+    },
+    { passive: true },
+  );
+}
+
 export function scrollToAnchor(anchorId: string): void {
   const target = document.getElementById(anchorId);
   if (!target) return;
@@ -33,11 +98,19 @@ export function scrollToAnchor(anchorId: string): void {
   const start = window.scrollY;
   const distance = targetTop - start;
 
-  // 已经到位或方向相反距离很短时直接跳，省掉一次动画
+  // 已经到位或距离极短时直接跳，省掉一次动画
   if (prefersReducedMotion() || Math.abs(distance) < 8) {
     window.scrollTo(0, targetTop);
+    lockedId = anchorId;
+    notifyLock();
+    armUserScrollUnlock();
     return;
   }
+
+  // 立刻锁定到目标：高亮一步到位，不经过中间章节
+  lockedId = anchorId;
+  notifyLock();
+  armUserScrollUnlock();
 
   const duration = Math.min(760, Math.max(320, Math.abs(distance) * 0.45));
 
@@ -50,9 +123,22 @@ export function scrollToAnchor(anchorId: string): void {
 
     window.scrollTo(0, start + distance * easeOutCubic(progress));
 
-    if (progress < 1) requestAnimationFrame(step);
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    } else {
+      /*
+       * 动画结束后**不**解锁。
+       *
+       * 解锁会让高亮立刻交还给正常跟踪逻辑，而正常逻辑按「阅读线」
+       * 判定：点击最底部那一节时（页面滚不动了）它会选中上面一节，
+       * 于是刚跳过去的高亮又回落一次，看起来像闪动。
+       * 保持锁定，等用户真正滚动再解锁。
+       */
+      programmatic = false;
+    }
   };
 
+  programmatic = true;
   requestAnimationFrame(step);
 }
 

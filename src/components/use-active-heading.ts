@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { TocItem } from "@/lib/posts";
+import {
+  getScrollLock,
+  getScrollLockServer,
+  isScrollLocked,
+  subscribeScrollLock,
+} from "@/lib/scroll";
 
 /**
  * 追踪当前正在阅读的小节。
@@ -11,6 +17,19 @@ import type { TocItem } from "@/lib/posts";
  */
 export function useActiveHeading(items: TocItem[]): string {
   const [activeId, setActiveId] = useState("");
+
+  /**
+   * 程序化滚动的锁定目标。
+   *
+   * 点击目录跳转时，页面会依次经过起点到终点之间的每一个章节。
+   * 如果高亮照常跟随，侧栏就会从上到下一项项刷过去，动静太大。
+   * 锁定期间高亮直接停在目标项上，不参与中间过程。
+   */
+  const lockedId = useSyncExternalStore(
+    subscribeScrollLock,
+    getScrollLock,
+    getScrollLockServer,
+  );
 
   // items 每次渲染都是新数组，直接放进依赖会导致观察器反复重挂。
   // 用内容拼成的字符串做依赖，只有目录真正变化时才重建。
@@ -36,6 +55,9 @@ export function useActiveHeading(items: TocItem[]): string {
      * 用固定偏移会让高亮比视线慢一拍。
      */
     const pickActive = () => {
+      // 程序化滚动期间不更新：直接跳过，让高亮停在锁定的目标项上
+      if (isScrollLocked()) return;
+
       const readingLine = window.innerHeight / 3;
 
       let candidate: HTMLElement | null = null;
@@ -87,5 +109,6 @@ export function useActiveHeading(items: TocItem[]): string {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return activeId;
+  // 锁定期间直接返回目标项：高亮一步到位，不经过中间章节
+  return lockedId ?? activeId;
 }

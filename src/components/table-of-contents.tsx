@@ -130,7 +130,13 @@ function Sidebar({ items }: { items: TocItem[] }) {
     <nav
       ref={navRef}
       aria-label="本文目录"
-      className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto pl-1"
+      /*
+        overflow-x-hidden 不能省：overflow-y 设成 auto 后，
+        按 CSS 规范 overflow-x 会从 visible 被计算成 auto，
+        于是任何一点点横向溢出（长英文单词、代码标识符）都会在底部
+        冒出一条横向滚动条。显式关掉它。
+      */
+      className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto overflow-x-hidden pl-1"
     >
       <p className="mb-3 pl-4 text-xs font-medium tracking-wide text-muted">
         本文目录
@@ -149,7 +155,7 @@ function Sidebar({ items }: { items: TocItem[] }) {
                   href={`#${node.id}`}
                   onClick={(e) => handleClick(e, node.id)}
                   aria-current={active ? "location" : undefined}
-                  className={`toc-link relative flex-1 rounded py-1.5 pl-4 pr-1 text-[13px] leading-snug break-words ${
+                  className={`toc-link relative min-w-0 flex-1 rounded py-1.5 pl-4 pr-1 text-[13px] leading-snug break-words ${
                     active
                       ? "font-medium text-accent"
                       : "text-secondary hover:text-foreground"
