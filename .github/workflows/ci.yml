@@ -1,0 +1,111 @@
+name: CI
+
+# 这个工作流存在的唯一理由：拦住「本地一切正常、只有导出构建才暴露」的问题。
+#
+# 已经踩过两次同类坑：
+#   1. pnpm-workspace.yaml 里 allowBuilds 写了占位字符串，本地因为
+#      node_modules 已存在从不重跑安装脚本，一到 Cloudflare 就
+#      ERR_PNPM_IGNORED_BUILDS。
+#   2. site-logo.tsx 用了 next/image，dev 有服务端所以正常，
+#      静态导出后 /_next/image 路由不存在，线上 logo 直接 404。
+#
+# 两次的共同点：本地开发环境的额外能力掩盖了生产环境的缺失。
+# 所以这里刻意用「全新安装 + 导出构建」，并在构建后对产物做断言。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支连续推送时取消上一次未跑完的任务，省额度也更快拿到结果
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 版本要和 package.json 的 packageManager 保持一致，
+      # 否则 pnpm 会因为两者不匹配而直接报错退出
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.6.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          # 对齐 Cloudflare 构建镜像使用的 Node 版本
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile：锁文件与 package.json 不一致时直接失败，
+      # 避免 CI 上悄悄改动依赖树、掩盖本地漏提交的变更
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      # 必须带 NEXT_OUTPUT=export，否则测的是本地构建路径，
+      # 而不是真实上线的那条路径——那 CI 就失去意义了
+      - name: 静态导出构建
+        run: NEXT_OUTPUT=export pnpm build
+
+      - name: 校验导出产物
+        run: |
+          set -uo pipefail
+
+          fail() { echo "::error::$1"; exit 1; }
+          ok()   { echo "✅ $1"; }
+
+          # ---- 基础产物 ----
+          [ -f out/index.html ]  || fail "缺少 out/index.html"
+          [ -f out/404.html ]    || fail "缺少 out/404.html（Cloudflare Pages 靠它做自定义 404）"
+          [ -f out/sitemap.xml ] || fail "缺少 out/sitemap.xml"
+          [ -f out/robots.txt ]  || fail "缺少 out/robots.txt"
+          ok "首页 / 404 / sitemap / robots 均存在"
+
+          # ---- sitemap 必须真有 URL，空 sitemap 说明 siteConfig.url 没配 ----
+          grep -q "<loc>" out/sitemap.xml \
+            || fail "sitemap.xml 里没有 <loc>，检查 lib/site.ts 的 siteConfig.url 是否为空"
+          ok "sitemap 含 $(grep -c '<loc>' out/sitemap.xml) 条 URL"
+
+          # ---- trailingSlash：文章页必须是目录形式 ----
+          # 目录形式是 /blog/x/index.html，平铺形式是 /blog/x.html。
+          # 后者需要在每个静态托管端单独配 rewrite，加国内 CDN 镜像时会踩坑。
+          [ -f out/blog/index.html ] \
+            || fail "文章列表不是目录形式，trailingSlash 可能失效"
+          ls out/blog/*/index.html >/dev/null 2>&1 \
+            || fail "文章详情页不是目录形式（应为 out/blog/<slug>/index.html）"
+          ok "文章页为目录形式（trailingSlash 生效）"
+
+          # ---- 标签页必须生成 ----
+          ls -d out/tags/*/ >/dev/null 2>&1 \
+            || fail "没有生成任何标签详情页"
+          ok "标签页已生成 $(ls -d out/tags/*/ | wc -l) 个"
+
+          # ---- 关键回归断言：next/image 的优化器引用 ----
+          # next/image 默认会输出 /_next/image?url=... 指向服务端优化接口，
+          # 静态产物里没有这个路由，图片会静默 404（顶栏 logo 就是这么丢的）。
+          # 一旦有人新增 next/image 用法而忘了 images.unoptimized，这里会拦住。
+          if grep -rq "_next/image" out --include="*.html"; then
+            echo "::error::产物中出现了 /_next/image 引用，静态导出下该路由不存在，图片会 404"
+            grep -rl "_next/image" out --include="*.html" | head -5
+            exit 1
+          fi
+          ok "无 /_next/image 引用（图片优化器已按要求关闭）"
+
+          # ---- public/ 资源要复制进产物 ----
+          [ -f out/site-logo.jpg ] || fail "site-logo.jpg 未复制到产物，顶栏图标会 404"
+          ok "public/ 资源已复制"
+
+          echo "---- 产物统计 ----"
+          echo "HTML 页面：$(find out -name '*.html' | wc -l)"
+          echo "文件总数：$(find out -type f | wc -l)"
