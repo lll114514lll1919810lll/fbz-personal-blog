@@ -2,7 +2,7 @@
  * 管理后台的数据接口。
  *
  *   GET    /api/admin/comments?limit=&offset=&q=&page=   列出留言（含总数）
- *   DELETE /api/admin/comments?id=<id>                    删除单条
+ *   DELETE /api/admin/comments?id=<id>                    删除单条（级联删回复）
  *
  * 与面向访客的 /api/comments 分开：
  * - 这里能列出**全部**文章的留言（评论管理需要跨文章视角）
@@ -10,7 +10,12 @@
  * - 全程要求登录态，且响应禁止缓存
  */
 
-import { adminJson, hasSession, PAGE_RE } from "../../_lib/api.js";
+import {
+  adminJson,
+  deleteCommentCascade,
+  hasSession,
+  PAGE_RE,
+} from "../../_lib/api.js";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -60,7 +65,7 @@ export async function onRequestGet({ request, env }) {
     .first();
 
   const rows = await env.DB.prepare(
-    `SELECT id, page, name, text,
+    `SELECT id, page, parent_id, name, text,
             strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
        FROM comments
        ${whereSql}
@@ -90,12 +95,9 @@ export async function onRequestDelete({ request, env }) {
     return adminJson({ error: "id 不合法" }, 400);
   }
 
-  const res = await env.DB.prepare(`DELETE FROM comments WHERE id = ?1`)
-    .bind(id)
-    .run();
-
-  // changes 为 0 说明这条本来就不存在——告诉前端，避免界面删了个寂寞却提示成功
-  const removed = res.meta?.changes ?? 0;
+  // 级联：删顶层留言时连同它的回复一起删，
+  // 否则那些回复的 parent_id 会指向一个不存在的 id，变成永远显示不出来的孤儿
+  const removed = await deleteCommentCascade(env.DB, "comments", id);
   if (!removed) return adminJson({ error: "留言不存在" }, 404);
 
   return adminJson({ ok: true, removed });

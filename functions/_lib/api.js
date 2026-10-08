@@ -167,6 +167,53 @@ export async function countRecent(db, table, ipHash, windowMinutes) {
   return row ? row.n : 0;
 }
 
+/* ----------------------------------------------------------- 回复关系 --- */
+
+/**
+ * 把「要回复的目标」归一化到顶层留言 id。
+ *
+ * 只允许两层：回复「回复」时向上归一到根留言，于是它变成同一层的兄弟。
+ * 无限嵌套在手机屏上缩进几层就没法读了，深树还会让「删除中间层」的语义
+ * 变得含糊——那到底是删这一条，还是连它下面的一串？
+ *
+ * 同时校验目标确实存在、且和当前页面属于同一篇文章——
+ * 否则可以构造一个 parent_id 把回复挂到别的文章下面去。
+ */
+export async function resolveReplyTarget(db, table, page, parentId) {
+  const row = await db
+    .prepare(`SELECT id, page, parent_id FROM ${table} WHERE id = ?1`)
+    .bind(parentId)
+    .first();
+
+  if (!row) return { error: "要回复的留言不存在" };
+  if (row.page !== page) return { error: "留言与当前页面不匹配" };
+
+  // parent_id 为 NULL 说明目标本身就是顶层留言
+  return { rootId: row.parent_id ?? row.id };
+}
+
+/**
+ * 删除一条留言；如果它是顶层留言，连同它下面所有回复一起删。
+ *
+ * 必须**先删子行再删父行**：反过来父行没了，子行的 parent_id 就指向一个
+ * 不存在的 id，那些回复会变成永远显示不出来的孤儿数据。
+ *
+ * 返回实际删掉的条数（含回复），调用方据此判断「是不是本来就不存在」。
+ */
+export async function deleteCommentCascade(db, table, id) {
+  const children = await db
+    .prepare(`DELETE FROM ${table} WHERE parent_id = ?1`)
+    .bind(id)
+    .run();
+
+  const self = await db
+    .prepare(`DELETE FROM ${table} WHERE id = ?1`)
+    .bind(id)
+    .run();
+
+  return (children.meta?.changes ?? 0) + (self.meta?.changes ?? 0);
+}
+
 /* --------------------------------------------------------------- 管理 --- */
 
 /**

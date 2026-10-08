@@ -1,17 +1,23 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { relativeTime } from "@/lib/time";
+import { absoluteTime, relativeTime } from "@/lib/time";
 
 /**
- * 文章底部的评论區。
+ * 文章底部的评论区。
  *
  * 这是全站**唯一**需要服务端的地方：页面本身仍然是静态预渲染的 HTML，
  * 评论在浏览器里向 /api/comments 取。对应后端是 functions/api/comments.js
  * （Cloudflare Pages Functions + D1），不进 Next 构建，所以静态导出不受影响。
  *
+ * 三件事在同一处完成：
+ * 1. 读取与发表（访客）
+ * 2. 回复——只做两层，回复「回复」时后端会归一到根留言，见下
+ * 3. 管理——登录后每一条旁边直接出现删除按钮，不必跳去 /admin
+ *
  * 三种拿不到数据的场景要分开对待，提示语完全不同：
- * - 本地 pnpm dev：没有 Functions，接口 404 → 「评论功能需本地 wrangler 启动」
+ * - 本地 pnpm dev：没有 Functions，接口 404 → 给出启动命令
  * - 线上没配 D1 绑定：接口 503 → 直接用后端返回的说明
  * - 网络抖动：fetch 抛异常 → 提示重试
  * 全都归成一句「加载失败」的话，排查时会很痛苦。
@@ -19,6 +25,8 @@ import { relativeTime } from "@/lib/time";
 
 type Comment = {
   id: number;
+  /** null = 顶层留言；非空 = 所回复的顶层留言 id */
+  parent_id: number | null;
   name: string;
   text: string;
   created_at: string; // ISO 8601（后端已在 SQL 里转好）
@@ -35,65 +43,83 @@ export function Comments({ page }: { page: string }) {
   const [notice, setNotice] = useState("");
   /** 是否跑在本机（决定显示开发者提示还是访客提示） */
   const [isLocal, setIsLocal] = useState(false);
+  /** 当前访客是否是管理员（决定要不要渲染管理按钮） */
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  /** 正在回复哪一条（null = 没打开回复框） */
+  const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [replyName, setReplyName] = useState("");
+  const [replyText, setReplyText] = useState("");
+  const [replySubmitting, setReplySubmitting] = useState(false);
+
+  /** 等待二次确认删除的 id */
+  const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   const [reloadKey, setReloadKey] = useState(0);
 
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
 
   /*
-   * 取评论列表。
+   * 拉取评论 + 判断是否管理员。
+   *
+   * 两个请求并行：管理员身份对普通访客是一次多余的请求，但它只做一次
+   * 签名校验、不查库，代价可以忽略；换来的是管理员登录后打开文章页
+   * 就能直接管理，不需要任何额外操作或入口。
    *
    * 所有 setState 都写在 await 之后：effect 里同步 setState 会触发
-   * react-hooks/set-state-in-effect（多一轮级联渲染），本站的
-   * reading-width 也是为此改用 useSyncExternalStore 的。
-   *
-   * AbortController 负责取消在途请求——否则网络慢时用户已经切走文章，
-   * 旧请求回来仍会对已卸载组件 setState。重试和提交后刷新都靠
-   * reloadKey 递增重新触发本 effect，而不是另外维护一个 load 函数。
+   * react-hooks/set-state-in-effect（多一轮级联渲染）。
    */
   useEffect(() => {
     const controller = new AbortController();
 
     (async () => {
       try {
-        const res = await fetch(
-          `/api/comments?page=${encodeURIComponent(page)}`,
-          { headers: { accept: "application/json" }, signal: controller.signal },
-        );
+        const [listRes, sessionRes] = await Promise.all([
+          fetch(`/api/comments?page=${encodeURIComponent(page)}`, {
+            headers: { accept: "application/json" },
+            signal: controller.signal,
+          }),
+          // 会话探测失败不该拖垮评论区，单独兜住
+          fetch("/api/admin/session", {
+            headers: { accept: "application/json" },
+            signal: controller.signal,
+          }).catch(() => null),
+        ]);
+
+        if (controller.signal.aborted) return;
+
+        if (sessionRes?.ok) {
+          const s = await sessionRes.json().catch(() => null);
+          if (controller.signal.aborted) return;
+          setIsAdmin(Boolean(s?.authenticated));
+        }
 
         // 404：本地 pnpm dev 没有 Functions；503：线上没配 D1 绑定
-        if (res.status === 404 || res.status === 503) {
-          const body = await res.json().catch(() => null);
+        if (listRes.status === 404 || listRes.status === 503) {
+          const body = await listRes.json().catch(() => null);
           if (controller.signal.aborted) return;
           setNotice(body?.error || "");
           // 线上页面只对访客说一句人话，具体原因留在 console 供站主排查
           console.warn(
-            `[comments] 接口不可用（HTTP ${res.status}）：${body?.error || "无详细信息"}`,
+            `[comments] 接口不可用（HTTP ${listRes.status}）：${body?.error || "无详细信息"}`,
           );
-
-          /*
-           * 是否本机开发，只在这条分支里判断。
-           *
-           * 不能在渲染期读 window.location —— 服务端渲染时没有 window，
-           * 客户端首次渲染却读得到，两边结果不同就会 hydration 不一致。
-           * 而 unavailable 这个状态只在客户端 fetch 之后才可能出现，
-           * 在这里判断天然安全。
-           */
           setIsLocal(
             /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname),
           );
           setStatus("unavailable");
           return;
         }
-        if (!res.ok) throw new Error(String(res.status));
+        if (!listRes.ok) throw new Error(String(listRes.status));
 
-        const list = await res.json();
+        const list = await listRes.json();
         // 后端出错时会返回错误对象而不是数组，这里挡一道，
-        // 否则下面的 map 会直接抛错、整块评论变成白屏
+        // 否则下面的分组会直接抛错、整块评论变成白屏
         if (!Array.isArray(list)) throw new Error("bad payload");
 
         if (controller.signal.aborted) return;
@@ -107,6 +133,50 @@ export function Comments({ page }: { page: string }) {
 
     return () => controller.abort();
   }, [page, reloadKey]);
+
+  /* ------------------------------------------------------------ 分组 --- */
+
+  /*
+   * 后端返回的是扁平列表（id 倒序 = 新在前），这里分成顶层和回复两层。
+   * 回复只做两层：后端已经把「回复的回复」归一到根留言，
+   * 所以 replyMap 的键一定是顶层留言的 id。
+   */
+  const roots: Comment[] = [];
+  const replyMap = new Map<number, Comment[]>();
+  for (const c of comments) {
+    if (c.parent_id === null) {
+      roots.push(c);
+    } else {
+      const arr = replyMap.get(c.parent_id);
+      if (arr) arr.push(c);
+      else replyMap.set(c.parent_id, [c]);
+    }
+  }
+  // 顶层是新在前（后端 id 倒序），但一层对话按时间正序读才自然
+  for (const arr of replyMap.values()) arr.reverse();
+
+  /* ------------------------------------------------------------ 动作 --- */
+
+  /** 发表（顶层或回复共用）。返回错误信息，null 表示成功。 */
+  async function post(payload: {
+    name: string;
+    text: string;
+    parentId: number | null;
+  }): Promise<string | null> {
+    const res = await fetch("/api/comments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        page,
+        name: payload.name,
+        text: payload.text,
+        ...(payload.parentId ? { parent_id: payload.parentId } : {}),
+      }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) return body?.error || "提交失败，请稍后再试";
+    return null;
+  }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -122,28 +192,238 @@ export function Comments({ page }: { page: string }) {
     setSubmitting(true);
     setNotice("");
     try {
-      const res = await fetch("/api/comments", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ page, name, text: trimmed }),
-      });
-      const body = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        setNotice(body?.error || "提交失败，请稍后再试");
+      const err = await post({ name, text: trimmed, parentId: null });
+      if (err) {
+        setNotice(err);
         return;
       }
-
       setText("");
       setNotice("留言成功");
-      // 递增 reloadKey 让上面的 effect 重新拉一次列表，
-      // 保证刚发的这条（以及别人的新留言）立刻出现
       setReloadKey((k) => k + 1);
     } catch {
       setNotice("提交失败，请检查网络后重试");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function onReplySubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (replySubmitting || replyTo === null) return;
+
+    const trimmed = replyText.trim();
+    if (!trimmed) {
+      setNotice("回复内容不能为空");
+      replyRef.current?.focus();
+      return;
+    }
+
+    setReplySubmitting(true);
+    setNotice("");
+    try {
+      const err = await post({
+        name: replyName,
+        text: trimmed,
+        parentId: replyTo,
+      });
+      if (err) {
+        setNotice(err);
+        return;
+      }
+      setReplyText("");
+      setReplyName("");
+      setReplyTo(null);
+      setNotice("回复成功");
+      setReloadKey((k) => k + 1);
+    } catch {
+      setNotice("提交失败，请检查网络后重试");
+    } finally {
+      setReplySubmitting(false);
+    }
+  }
+
+  async function remove(id: number) {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/admin/comments?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (res.status === 401) {
+        setIsAdmin(false);
+        setNotice("登录已失效，请重新登录后再试");
+        return;
+      }
+
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setNotice(body?.error || "删除失败");
+        return;
+      }
+
+      setPendingDelete(null);
+      setNotice(
+        body?.removed > 1 ? `已删除（含 ${body.removed - 1} 条回复）` : "已删除",
+      );
+      setReloadKey((k) => k + 1);
+    } catch {
+      setNotice("网络异常，删除失败");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  /* ------------------------------------------------------------ 渲染 --- */
+
+  /** 单条留言的头部：昵称、时间、回复与管理操作 */
+  function renderMeta(c: Comment) {
+    return (
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-sm font-medium">{c.name}</span>
+        <time
+          dateTime={c.created_at}
+          title={absoluteTime(c.created_at)}
+          className="text-xs text-muted"
+        >
+          {relativeTime(c.created_at)}
+        </time>
+        <span className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setReplyTo(replyTo === c.id ? null : c.id);
+              setNotice("");
+            }}
+            className="text-xs text-muted transition-colors hover:text-accent"
+          >
+            {replyTo === c.id ? "取消" : "回复"}
+          </button>
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setPendingDelete(pendingDelete === c.id ? null : c.id)}
+              className="text-xs text-muted transition-colors hover:text-red-600 dark:hover:text-red-400"
+            >
+              删除
+            </button>
+          )}
+        </span>
+      </div>
+    );
+  }
+
+  /** 管理员的二次确认条；删顶层留言时会提示将连带删掉几条回复 */
+  function renderDeleteConfirm(c: Comment, replyCount: number) {
+    if (pendingDelete !== c.id) return null;
+    return (
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 rounded-[var(--radius-panel)] border border-red-500/25 bg-red-500/5 px-3 py-2">
+        <span className="text-xs text-muted">
+          {replyCount > 0
+            ? `确定删除？该留言下的 ${replyCount} 条回复会一并删掉。`
+            : "确定删除这条留言？"}
+        </span>
+        <button
+          type="button"
+          disabled={deletingId === c.id}
+          onClick={() => remove(c.id)}
+          className="btn-pill text-red-600 dark:text-red-400"
+        >
+          {deletingId === c.id ? "删除中…" : "确认删除"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setPendingDelete(null)}
+          className="btn-pill"
+        >
+          取消
+        </button>
+      </div>
+    );
+  }
+
+  /** 回复表单。同一时刻只开一个，所以共用一份 state。 */
+  function renderReplyForm(target: Comment) {
+    if (replyTo !== target.id) return null;
+    return (
+      <form onSubmit={onReplySubmit} className="mt-3 flex flex-col gap-2">
+        <label className="sr-only" htmlFor={`reply-name-${target.id}`}>
+          昵称（可留空）
+        </label>
+        <input
+          id={`reply-name-${target.id}`}
+          type="text"
+          value={replyName}
+          maxLength={MAX_NAME}
+          onChange={(e) => setReplyName(e.target.value)}
+          placeholder={`回复 ${target.name}（昵称可留空）`}
+          className="field-input"
+        />
+
+        <label className="sr-only" htmlFor={`reply-text-${target.id}`}>
+          回复内容
+        </label>
+        <textarea
+          id={`reply-text-${target.id}`}
+          ref={replyRef}
+          value={replyText}
+          rows={3}
+          maxLength={MAX_TEXT}
+          onChange={(e) => setReplyText(e.target.value)}
+          placeholder="写下你的回复…"
+          className="field-input resize-y"
+        />
+
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-xs text-muted tabular-nums">
+            {replyText.length}/{MAX_TEXT}
+          </span>
+          <button
+            type="submit"
+            disabled={replySubmitting}
+            className="btn-pill"
+          >
+            {replySubmitting ? "发送中…" : "发送回复"}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  /** 一条留言（含它的回复与管理控件）。isReply 只影响缩进层级。 */
+  function renderComment(c: Comment, isReply: boolean) {
+    const replies = replyMap.get(c.id) ?? [];
+    const replyCount = replies.length;
+
+    return (
+      <div key={c.id}>
+        <article
+          className={
+            isReply
+              ? "panel-raised panel rounded-[var(--radius-panel)] px-4 py-3"
+              : "panel-raised panel rounded-[var(--radius-panel)] px-4 py-4"
+          }
+        >
+          {renderMeta(c)}
+          {/* whitespace-pre-wrap 保留用户输入的换行；
+              break-words 防止超长无空格串（URL）撑破面板 */}
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-secondary">
+            {c.text}
+          </p>
+          {renderDeleteConfirm(c, replyCount)}
+        </article>
+
+        {renderReplyForm(c)}
+
+        {!isReply && replyCount > 0 && (
+          <ul className="mt-3 flex flex-col gap-3 border-l border-border pl-4">
+            {replies.map((r) => (
+              <li key={r.id}>{renderComment(r, true)}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
   }
 
   const total = comments.length;
@@ -163,10 +443,19 @@ export function Comments({ page }: { page: string }) {
             )}
           </h2>
         </div>
-        {/* 这句是在承诺「可以留言」，服务不可用时不该出现——
-            否则访客会去找一个根本不存在的输入框 */}
-        {status === "ready" && (
-          <p className="text-xs text-muted">无需登录，昵称可留空</p>
+
+        {isAdmin ? (
+          // 管理员看到的是「身份 + 出口」，而不是「你也能留言」那句提示
+          <p className="text-xs text-muted">
+            <span className="text-accent">管理员</span> · 可直接删除下方留言 ·{" "}
+            <Link href="/admin" className="underline underline-offset-2 hover:text-accent">
+              全部留言
+            </Link>
+          </p>
+        ) : (
+          status === "ready" && (
+            <p className="text-xs text-muted">无需登录，昵称可留空</p>
+          )
         )}
       </div>
 
@@ -210,11 +499,7 @@ export function Comments({ page }: { page: string }) {
               <span className="text-xs text-muted tabular-nums">
                 {text.length}/{MAX_TEXT}
               </span>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="btn-pill"
-              >
+              <button type="submit" disabled={submitting} className="btn-pill">
                 {submitting ? "发送中…" : "发表"}
               </button>
             </div>
@@ -268,28 +553,10 @@ export function Comments({ page }: { page: string }) {
         <p className="mt-6 text-sm text-muted">还没有留言，来做第一个。</p>
       )}
 
-      {status === "ready" && total > 0 && (
-        <ul className="mt-6 flex flex-col gap-3">
-          {comments.map((c) => (
-            <li
-              key={c.id}
-              /* panel-raised 是「叠在别的面板之上」的层级——
-                 本组件位于文章面板内部，用它会得到正确的视觉层次，
-                 而不是再嵌一层 .panel（嵌套面板会在接缝处露出弧度） */
-              className="panel-raised panel rounded-[var(--radius-panel)] px-4 py-3"
-            >
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="text-sm font-medium">{c.name}</span>
-                <time dateTime={c.created_at} className="text-xs text-muted">
-                  {relativeTime(c.created_at)}
-                </time>
-              </div>
-              {/* whitespace-pre-wrap 保留用户输入的换行；
-                  break-words 防止超长无空格串（URL）撑破面板 */}
-              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-secondary">
-                {c.text}
-              </p>
-            </li>
+      {status === "ready" && roots.length > 0 && (
+        <ul className="mt-6 flex flex-col gap-4">
+          {roots.map((c) => (
+            <li key={c.id}>{renderComment(c, false)}</li>
           ))}
         </ul>
       )}

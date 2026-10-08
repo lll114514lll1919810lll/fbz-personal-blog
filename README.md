@@ -487,6 +487,16 @@ DNS 用子域名接入，阿里云 DNS 保持不动，加一条 CNAME 指向
 两个文件都必须写 `export const dynamic = "force-static"`：静态导出下
 元数据路由不显式声明就会构建失败（`not configured on route "/robots.txt"`）。
 
+### 404 页
+
+`src/app/not-found.tsx`。Next 的默认 404 只有一行英文
+「This page could not be found.」，和中文站完全不搭，也没给出路。
+这里补上中文说明、三个出口（首页 / 全部文章 / 标签）和搜索快捷键提示。
+
+静态导出会生成 `out/404.html`，Cloudflare Pages 找不到资源时自动回落到它。
+文章详情页调用 `notFound()` 时同理——那种页面根本不会被生成，
+访客拿到的就是这个 404。
+
 ### 国内访问
 
 Cloudflare 免费版**没有中国大陆节点**，绑定自有域名只是降低被干扰概率，
@@ -525,19 +535,62 @@ wrangler.toml               Pages 配置与 D1 绑定
 ### 接口
 
 ```
-GET    /api/comments?page=<slug>              列出留言（最多 200 条）
-POST   /api/comments   { page, name, text }   发表留言
-DELETE /api/comments?id=<id>&key=<ADMIN_KEY>  管理员删除
+GET    /api/comments?page=<slug>                       列出留言（最多 200 条）
+POST   /api/comments   { page, name, text, parent_id? } 发表留言或回复
+DELETE /api/comments?id=<id>&key=<ADMIN_KEY>           管理员删除（级联删回复）
 ```
+
+`parent_id` 不传就是顶层留言；传了表示回复，详见下面的「回复」。
+
+### 回复
+
+**只做两层。** 回复「回复」时后端会把 `parent_id` 归一到根留言
+（见 `_lib/api.js` 的 `resolveReplyTarget`），于是它成为同一层里的兄弟回复。
+
+这么选是因为无限嵌套在手机屏上缩进几层就没法读，而且深树会让
+「删除中间层」的语义变含糊——那到底删这一条，还是连它下面一串？
+
+接口层还校验回复目标**必须存在且属于同一篇文章**，否则可以构造一个
+`parent_id` 把回复挂到别的文章下面去。
+
+**删除是级联的**：删顶层留言时连同它所有回复一起删（`deleteCommentCascade`），
+且必须**先删子行再删父行**——反过来父行没了，子行的 `parent_id` 就指向一个
+不存在的 id，那些回复会变成永远显示不出来的孤儿数据。后台的二次确认会
+提示「该留言下的 N 条回复会一并删掉」。
 
 ### 设计取舍
 
 - **不做登录。** 匿名 + 昵称 + 限流足够，引入账号体系会让大多数想留言的人放弃。
   昵称可留空，记作「路人」。
 - **不存 IP。** 只存加盐 SHA-256 哈希，仅用于限流；数据库里不留访客真实 IP。
-- **限流**：同一 IP 10 分钟内最多 3 条。
+- **限流**：同一 IP 10 分钟内最多 3 条（回复同样计数）。
 - **管理**：登录与删除都需要 `ADMIN_KEY`，前端不持有。密钥比较用常量时间，
   避免通过响应时间差逐位猜出密钥。
+
+### 两种管理入口
+
+| 入口 | 场景 |
+| --- | --- |
+| `/admin` | 跨文章浏览全部留言、搜索、分页 |
+| 文章页评论区 | 登录后每条旁边直接出现「删除」，就地管理 |
+
+文章页那套靠一次 `/api/admin/session` 探测身份：对普通访客是多余的一次请求，
+但它只做签名校验、不查库，代价可以忽略；换来的是管理员打开任意文章页
+就能直接管理，不需要任何额外入口。
+
+### 数据库迁移
+
+`db/schema.sql` 只负责**全新安装**——`CREATE TABLE IF NOT EXISTS` 不会给已存在
+的表加列。已有数据的库要跑 `db/migrations/` 下的脚本：
+
+```bash
+# 本地
+npx wrangler d1 execute fbz-blog-comments --local  --file=db/migrations/0001-add-parent-id.sql
+# 线上
+npx wrangler d1 execute fbz-blog-comments --remote --file=db/migrations/0001-add-parent-id.sql
+```
+
+`parent_id` 允许为 NULL，所以迁移不需要回填，已有留言自动成为顶层留言。
 
 ### 本仓库当前已配置好
 

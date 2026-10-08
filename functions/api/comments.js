@@ -1,21 +1,23 @@
 /**
  * 评论接口（Cloudflare Pages Functions + D1）
  *
- *   GET    /api/comments?page=<slug>            列出某篇文章的评论
- *   POST   /api/comments   { page, name, text } 发表评论
- *   DELETE /api/comments?id=<id>&key=<ADMIN_KEY> 管理员删除
+ *   GET    /api/comments?page=<slug>                         列出某篇文章的评论
+ *   POST   /api/comments   { page, name, text, parent_id? }  发表评论或回复
+ *   DELETE /api/comments?id=<id>&key=<ADMIN_KEY>             管理员删除（级联删回复）
  *
  * 设计取舍：
  * - 不做登录。个人博客的评论用「匿名 + 昵称 + 限流 + 管理密钥」就够了，
  *   引入账号体系会让九成想留言的人直接放弃。
  * - 昵称可选，留空记作「路人」。
  * - 只存 IP 的哈希，不存原始 IP（见 _lib/api.js 的 ipHashOf）。
+ * - 回复只做两层，见 _lib/api.js 的 resolveReplyTarget。
  */
 
 import {
   adminAuthorized,
   countRecent,
   createHandlers,
+  deleteCommentCascade,
   ipHashOf,
   json,
   LIST_LIMIT,
@@ -24,6 +26,7 @@ import {
   RATE_LIMIT,
   RATE_WINDOW_MIN,
   readJson,
+  resolveReplyTarget,
   validateComment,
 } from "../_lib/api.js";
 
@@ -47,7 +50,7 @@ async function handle(request, env, url) {
     // created_at 统一在 SQL 里转成 ISO 8601（带 T 和 Z），
     // 免得前端还要猜 SQLite datetime() 的 "YYYY-MM-DD HH:MM:SS" 是哪个时区。
     const res = await env.DB.prepare(
-      `SELECT id, name, text,
+      `SELECT id, parent_id, name, text,
               strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
          FROM ${TABLE}
         WHERE page = ?1
@@ -72,6 +75,18 @@ async function handle(request, env, url) {
     const bad = validateComment({ page, name, text });
     if (bad) return json(bad, 400, origin);
 
+    // parent_id 可选：不传就是顶层留言
+    let parentId = null;
+    if (body.parent_id !== undefined && body.parent_id !== null) {
+      const raw = Number(body.parent_id);
+      if (!Number.isInteger(raw) || raw <= 0) {
+        return json({ error: "回复目标不合法" }, 400, origin);
+      }
+      const target = await resolveReplyTarget(env.DB, TABLE, page, raw);
+      if (target.error) return json({ error: target.error }, 400, origin);
+      parentId = target.rootId;
+    }
+
     const ipHash = await ipHashOf(request, env);
 
     const recent = await countRecent(env.DB, TABLE, ipHash, RATE_WINDOW_MIN);
@@ -84,9 +99,10 @@ async function handle(request, env, url) {
     }
 
     await env.DB.prepare(
-      `INSERT INTO ${TABLE} (page, name, text, ip_hash) VALUES (?1, ?2, ?3, ?4)`,
+      `INSERT INTO ${TABLE} (page, parent_id, name, text, ip_hash)
+       VALUES (?1, ?2, ?3, ?4, ?5)`,
     )
-      .bind(page, name, text, ipHash)
+      .bind(page, parentId, name, text, ipHash)
       .run();
 
     return json({ ok: true }, 200, origin);
@@ -103,8 +119,10 @@ async function handle(request, env, url) {
       return json({ error: "id 不合法" }, 400, origin);
     }
 
-    await env.DB.prepare(`DELETE FROM ${TABLE} WHERE id = ?1`).bind(id).run();
-    return json({ ok: true }, 200, origin);
+    const removed = await deleteCommentCascade(env.DB, TABLE, id);
+    if (!removed) return json({ error: "留言不存在" }, 404, origin);
+
+    return json({ ok: true, removed }, 200, origin);
   }
 
   return json({ error: "不支持的请求方法" }, 405, origin);

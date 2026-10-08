@@ -96,6 +96,14 @@ jobs:
           [ -f out/robots.txt ]  || fail "缺少 out/robots.txt"
           ok "首页 / 404 / sitemap / robots 均存在"
 
+          # ---- 404 必须是我们自己的页面 ----
+          # Next 自带一个只有英文 "This page could not be found." 的默认 404。
+          # 一旦 src/app/not-found.tsx 被删或失效，构建不会报错，
+          # 但访客会突然看到那个英文页——所以在这里断言内容。
+          grep -q "这个页面不存在" out/404.html \
+            || fail "out/404.html 不是自定义 404（src/app/not-found.tsx 可能失效了）"
+          ok "自定义 404 已生成"
+
           # ---- sitemap 必须真有 URL，空 sitemap 说明 siteConfig.url 没配 ----
           grep -q "<loc>" out/sitemap.xml \
             || fail "sitemap.xml 里没有 <loc>，检查 lib/site.ts 的 siteConfig.url 是否为空"
