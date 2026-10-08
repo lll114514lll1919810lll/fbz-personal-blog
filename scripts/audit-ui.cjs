@@ -65,6 +65,13 @@ async function goto(send, url, width, height) {
     width, height, deviceScaleFactor: 1, mobile: width < 768,
   });
   await send('Page.navigate', { url });
+  /*
+     必须把窗口置前。窗口被遮住时浏览器不出帧：滚动驱动的效果
+     （进度条、目录高亮）、悬停、键盘事件全部停在原地，
+    审计会量到一连串「没变化」的假失败（进度条端点为 0、高亮不动、
+     悬停不变色、移动端目录点不开）。每次导航后都置前一次，成本为零。
+   */
+  await send('Page.bringToFront');
   await new Promise((r) => setTimeout(r, 2600));
 }
 
