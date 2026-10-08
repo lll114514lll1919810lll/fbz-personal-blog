@@ -30,21 +30,34 @@ export default async function TagPage({ params }: PageProps<"/tags/[tag]">) {
   if (!getAllTags().some((t) => t.tag === decoded)) notFound();
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="panel panel-strong flex flex-col gap-1 px-6 py-5">
-        <h1 className="text-3xl font-bold tracking-tight">
-          <span className="text-accent">#</span>
-          {decoded}
-        </h1>
-        <p className="text-sm text-muted">共 {posts.length} 篇</p>
+    <div className="flex flex-col gap-10 sm:gap-12">
+      <header className="page-hero panel panel-strong flex flex-col gap-4 px-7 py-8 sm:px-10 sm:py-9">
+        <p className="eyebrow">TOPIC ARCHIVE</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+              <span className="text-accent">#</span>
+              {decoded}
+            </h1>
+            <p className="mt-3 text-base leading-relaxed text-secondary">
+              这个主题下的文章与记录。
+            </p>
+          </div>
+          <span className="text-sm text-muted">{posts.length} 篇文章</span>
+        </div>
       </header>
 
-      {/* 同一套筛选栏，当前标签高亮，「全部」可一键清除筛选 */}
-      <TagFilterBar tags={getAllTags()} activeTag={decoded} />
+      <section className="panel flex flex-col gap-4 px-5 py-5 sm:px-6">
+        <div>
+          <p className="eyebrow">EXPLORE TOPICS</p>
+          <p className="mt-2 text-sm text-secondary">切换到其他主题</p>
+        </div>
+        <TagFilterBar tags={getAllTags()} activeTag={decoded} />
+      </section>
 
       {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线） */}
       {posts.length > 0 ? (
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {posts.map((post) => (
             <PostCard key={post.slug} post={post} />
           ))}

@@ -36,7 +36,7 @@ export function PostBody({
   const next = READING_WIDTHS[(currentIndex + 1) % READING_WIDTHS.length];
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10 sm:gap-12">
       {/* 移动端：目录收在折叠按钮里 */}
       <div className="xl:hidden">
         <TableOfContents variant="collapsible" items={toc} />
@@ -52,7 +52,7 @@ export function PostBody({
             panel-strong：整篇文章是一块阅读面板，用更实的底
             （0.86 而不是 0.72），长文叠在背景图上才不费眼。 */}
         <article
-          className="panel panel-strong w-full min-w-0 px-5 py-6 transition-[max-width] duration-300 ease-out sm:px-7"
+          className="panel panel-strong w-full min-w-0 px-5 py-7 transition-[max-width] duration-300 ease-out sm:px-9 sm:py-9"
           style={{ maxWidth: width.maxWidth }}
         >
           {header}
@@ -62,12 +62,13 @@ export function PostBody({
               label={width.label}
               hint={width.hint}
               currentIndex={currentIndex}
+              onSelect={(id) => setWidth(id)}
               onAdvance={() => setWidth(next.id)}
               nextLabel={next.label}
             />
           </div>
 
-          <div className="prose border-t border-border pt-8">{children}</div>
+          <div className="prose border-t border-border pt-9">{children}</div>
 
           <div className="mt-12">{footer}</div>
         </article>
@@ -90,74 +91,81 @@ export function PostBody({
   );
 }
 
-/** 宽度调节条：档位指示 + 切换按钮 + 文字提示，三重视觉提示。 */
+/** 宽度调节条：把当前说明、档位轨道和切换入口合并成一条控制线。 */
 function WidthControl({
   label,
   hint,
   currentIndex,
+  onSelect,
   onAdvance,
   nextLabel,
 }: {
   label: string;
   hint: string;
   currentIndex: number;
+  onSelect: (id: (typeof READING_WIDTHS)[number]["id"]) => void;
   onAdvance: () => void;
   nextLabel: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border pb-4">
-      <p className="text-[13px] text-muted">
-        正文宽度 · <span className="text-secondary">{hint}</span>
+    <div className="reading-width-control" aria-label="正文宽度调节">
+      <p className="reading-width-copy">
+        <span>正文宽度</span>
+        <strong>{hint}</strong>
       </p>
 
-      <div className="flex items-center gap-2">
-        {/* 三格高度指示器：直观表示档位数量和当前位置 */}
-        <div className="flex items-end gap-[3px]" aria-hidden>
-          {READING_WIDTHS.map((w, i) => (
-            <span
-              key={w.id}
-              className={`w-[3px] rounded-full transition-all duration-200 ${
-                i === currentIndex
-                  ? "h-3.5 bg-accent"
-                  : i < currentIndex
-                    ? "h-2 bg-muted"
-                    : "h-1.5 bg-border"
-              }`}
-            />
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={onAdvance}
-          title={`当前「${label}」：${hint}。点击切换为「${nextLabel}」`}
-          /* min-h-8（32px）保证触控热区达标：按钮本身字很小，
-             但手机上一根手指点下去需要足够的面积 */
-          className="group flex min-h-8 items-center gap-1 rounded-md border border-panel-edge bg-panel-raised px-2.5 py-1.5 text-[12px] text-secondary backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
-        >
-          <span className="tabular-nums">{label}</span>
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
-            fill="none"
-            aria-hidden
-            className="text-muted transition-transform duration-300 group-hover:rotate-90"
+      <div className="reading-width-track" role="radiogroup" aria-label="选择正文宽度">
+        <span
+          className="reading-width-progress"
+          style={{
+            transform: `translateY(-50%) scaleX(${currentIndex / (READING_WIDTHS.length - 1)})`,
+          }}
+          aria-hidden="true"
+        />
+        {READING_WIDTHS.map((w, i) => (
+          <button
+            key={w.id}
+            type="button"
+            role="radio"
+            aria-checked={i === currentIndex}
+            aria-label={`${w.label}，${w.hint}`}
+            title={`切换为「${w.label}」：${w.hint}`}
+            onClick={() => onSelect(w.id)}
+            className={`reading-width-stop ${i === currentIndex ? "is-active" : ""}`}
           >
-            <path
-              d="M3 1.5L6 5L3 8.5"
-              stroke="currentColor"
-              strokeWidth="1.3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-
-        <span className="sr-only">
-          正文宽度：{label}，{hint}。当前选项。
-        </span>
+            <span aria-hidden="true" />
+          </button>
+        ))}
       </div>
+
+      <button
+        type="button"
+        onClick={onAdvance}
+        title={`当前「${label}」：${hint}。点击切换为「${nextLabel}」`}
+        className="reading-width-current"
+      >
+        <span>{label}</span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          aria-hidden
+          className="transition-transform duration-300 group-hover:translate-x-0.5"
+        >
+          <path
+            d="M3 1.5L6 5L3 8.5"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
+      <span className="sr-only">
+        正文宽度：{label}，{hint}。当前选项。点击轨道档位可直接调整，点击右侧按钮切换为{nextLabel}。
+      </span>
     </div>
   );
 }

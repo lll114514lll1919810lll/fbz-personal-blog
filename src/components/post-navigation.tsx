@@ -19,12 +19,12 @@ export function PostNavigation({
   return (
     <nav
       aria-label="文章导航"
-      className="grid gap-3 border-t border-border pt-6 sm:grid-cols-2"
+      className="grid gap-4 border-t border-border pt-8 sm:grid-cols-2"
     >
       {previous ? (
         <Link
           href={`/blog/${previous.slug}`}
-          className="panel-raised panel group flex flex-col gap-1 rounded-[var(--radius-panel)] p-4 transition-colors hover:border-accent/40"
+          className="panel-raised panel group flex min-h-24 flex-col justify-between gap-2 rounded-[var(--radius-panel)] p-5 transition-colors hover:border-accent/40"
         >
           <span className="text-xs text-muted">← 上一篇</span>
           <span className="text-sm font-medium transition-colors group-hover:text-accent">
@@ -38,7 +38,7 @@ export function PostNavigation({
       {next && (
         <Link
           href={`/blog/${next.slug}`}
-          className="panel-raised panel group flex flex-col gap-1 rounded-[var(--radius-panel)] p-4 text-right transition-colors hover:border-accent/40 sm:col-start-2"
+          className="panel-raised panel group flex min-h-24 flex-col justify-between gap-2 rounded-[var(--radius-panel)] p-5 text-right transition-colors hover:border-accent/40 sm:col-start-2"
         >
           <span className="text-xs text-muted">下一篇 →</span>
           <span className="text-sm font-medium transition-colors group-hover:text-accent">

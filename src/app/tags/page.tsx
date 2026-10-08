@@ -11,23 +11,31 @@ export default function TagsPage() {
   const tags = getAllTags();
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="panel panel-strong flex flex-col gap-1 px-6 py-5">
-        <h1 className="text-3xl font-bold tracking-tight">标签</h1>
-        <p className="text-sm text-muted">共 {tags.length} 个</p>
+    <div className="flex flex-col gap-10 sm:gap-12">
+      <header className="page-hero panel panel-strong flex flex-col gap-4 px-7 py-8 sm:px-10 sm:py-9">
+        <p className="eyebrow">TOPICS</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">标签</h1>
+            <p className="mt-3 max-w-xl text-base leading-relaxed text-secondary">
+              用主题把零散的文章串起来，找到你此刻想读的内容。
+            </p>
+          </div>
+          <span className="text-sm text-muted">{tags.length} 个主题</span>
+        </div>
       </header>
 
       {tags.length > 0 ? (
         <>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {tags.map(({ tag, count }) => (
               <Link
                 key={tag}
                 href={`/tags/${encodeURIComponent(tag)}`}
-                className="group flex items-center gap-2 rounded-full border border-panel-edge bg-panel-raised px-3.5 py-1.5 text-sm backdrop-blur-sm transition-colors hover:border-accent hover:bg-accent-soft"
+                className="panel panel-raised group flex items-center justify-between gap-3 px-5 py-4 transition-colors hover:border-accent/40 hover:bg-panel-strong"
               >
-                {tag}
-                <span className="text-xs tabular-nums text-muted transition-colors group-hover:text-accent">
+                <span className="font-medium transition-colors group-hover:text-accent">#{tag}</span>
+                <span className="rounded-full border border-border px-2 py-1 text-xs tabular-nums text-muted transition-colors group-hover:border-accent/30 group-hover:text-accent">
                   {count}
                 </span>
               </Link>

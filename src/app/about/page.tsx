@@ -8,19 +8,23 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <div className="flex flex-col gap-8">
-      {/* 页面标题不放进 .prose：.prose 会把它压成正文大小，
-          反而比下面的 h2 小，层级就乱了 */}
-      <header className="panel panel-strong flex flex-col gap-1 px-6 py-5">
-        <h1 className="text-3xl font-bold tracking-tight">关于</h1>
-        <p className="text-sm text-muted">
-          {siteConfig.author} 的个人博客
-        </p>
+    <div className="flex flex-col gap-10 sm:gap-12">
+      <header className="page-hero panel panel-strong grid gap-8 px-7 py-8 sm:px-10 sm:py-9 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
+        <div className="flex flex-col gap-4">
+          <p className="eyebrow">ABOUT THIS SPACE</p>
+          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">关于</h1>
+          <p className="max-w-xl text-base leading-relaxed text-secondary">
+            {siteConfig.author} 的个人博客，记录正在学习、正在实践，也记录偶尔停下来观察生活的时刻。
+          </p>
+        </div>
+        <div className="about-mark" aria-hidden="true">
+          <span>FZ</span>
+        </div>
       </header>
 
       {/* max-w-[42rem] 把正文约束在约 40 字/行：中文长文超过 45 字就容易串行。
             max-w-none 会让 prose 铺满整个容器，宽屏下行长失控。 */}
-      <div className="panel panel-strong prose max-w-[42rem] px-6 py-6">
+      <div className="panel panel-strong prose max-w-3xl px-6 py-7 sm:px-10 sm:py-9">
         <p>
           你好，我是 <strong>{siteConfig.author}</strong>。这里是{siteConfig.name}
           ，用来存放我的技术笔记、思考和随手记录。

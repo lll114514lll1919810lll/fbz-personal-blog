@@ -55,7 +55,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
     <PostBody
       toc={toc}
       header={
-        <header className="flex flex-col gap-4 pb-6">
+        <header className="article-header flex flex-col gap-5 pb-7">
           {/*
             这里原本是一条面包屑「文章 / 第一个标签」。
             那个「分类」其实是 tags[0]，纯粹取决于标签书写顺序，
@@ -64,18 +64,19 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
           */}
           <Link
             href="/blog"
-            className="-my-2 inline-flex items-center gap-1 py-2 text-[13px] text-muted transition-colors hover:text-secondary"
+            className="inline-flex w-fit items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-accent/40 hover:text-accent"
           >
             <span aria-hidden>←</span>
             文章
           </Link>
 
-          <h1 className="text-3xl font-bold leading-tight tracking-tight">
+          <p className="eyebrow">FIELD NOTE</p>
+          <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
             {post.title}
           </h1>
 
           {post.description && (
-            <p className="text-base leading-relaxed text-secondary">
+            <p className="max-w-2xl text-base leading-relaxed text-secondary">
               {post.description}
             </p>
           )}
@@ -95,7 +96,7 @@ export default async function PostPage({ params }: PageProps<"/blog/[slug]">) {
                     <Link
                       key={tag}
                       href={`/tags/${encodeURIComponent(tag)}`}
-                      className="inline-flex items-center rounded border border-border px-2 py-2.5 text-[11px] leading-none transition-colors hover:border-accent hover:text-accent"
+                      className="inline-flex items-center rounded-full border border-border px-2.5 py-1.5 text-[11px] leading-none transition-colors hover:border-accent hover:text-accent"
                     >
                       {tag}
                     </Link>

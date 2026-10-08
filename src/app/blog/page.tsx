@@ -13,18 +13,31 @@ export default function BlogPage() {
   const tags = getAllTags();
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="panel panel-strong flex flex-col gap-1 px-6 py-5">
-        <h1 className="text-3xl font-bold tracking-tight">文章</h1>
-        <p className="text-sm text-muted">共 {posts.length} 篇</p>
+    <div className="flex flex-col gap-10 sm:gap-12">
+      <header className="page-hero panel panel-strong flex flex-col gap-4 px-7 py-8 sm:px-10 sm:py-9">
+        <p className="eyebrow">ALL WRITINGS</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">文章</h1>
+            <p className="mt-3 max-w-xl text-base leading-relaxed text-secondary">
+              从实践出发，记录技术、产品和那些值得慢慢想清楚的事情。
+            </p>
+          </div>
+          <span className="text-sm text-muted">{posts.length} 篇文章</span>
+        </div>
       </header>
 
-      {/* 顶部标签筛选：点某个标签跳到 /tags/<标签>，那里只显示该标签的文章 */}
-      <TagFilterBar tags={tags} />
+      <section className="panel flex flex-col gap-4 px-5 py-5 sm:px-6">
+        <div>
+          <p className="eyebrow">FILTER BY TOPIC</p>
+          <p className="mt-2 text-sm text-secondary">按主题浏览文章</p>
+        </div>
+        <TagFilterBar tags={tags} />
+      </section>
 
       {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线） */}
       {posts.length > 0 ? (
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {posts.map((post) => (
             <PostCard key={post.slug} post={post} />
           ))}

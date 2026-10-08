@@ -3,6 +3,13 @@ import type { Post } from "@/lib/posts";
 import { formatDate } from "@/lib/date";
 import { LinkPending } from "@/components/link-pending";
 
+const coverThemes = ["cover-sky", "cover-violet", "cover-amber", "cover-mint"];
+
+function getCoverTheme(slug: string) {
+  const score = [...slug].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  return coverThemes[score % coverThemes.length];
+}
+
 /**
  * 文章列表里的一项。
  *
@@ -15,9 +22,17 @@ import { LinkPending } from "@/components/link-pending";
  * - 悬停时面板底色变实一点，摘要和标签淡入，露出更多信息
  * - 标题左侧有一条短横线，悬停时横向延展，作为「这里可点」的暗示
  */
-export function PostCard({ post }: { post: Post }) {
+export function PostCard({
+  post,
+  featured = false,
+}: {
+  post: Post;
+  featured?: boolean;
+}) {
+  const coverTheme = getCoverTheme(post.slug);
+
   return (
-    <article className="group relative">
+    <article className={`group relative ${featured ? "h-full" : ""}`}>
       {/* 用绝对定位的链接铺满整行作为悬停热区，比只让文字可点更好点。
           tabIndex={-1} 让它不进入 Tab 顺序，键盘用户走下方的真实链接。
 
@@ -36,8 +51,21 @@ export function PostCard({ post }: { post: Post }) {
 {/* pointer-events-none 必须保留：内容层盖在热区链接之上，
             去掉它点击标题就不会导航了（事件被这一层吃掉）。
             悬停效果靠 group-hover 从 article 上继承，不影响。 */}
-      <div className="panel pointer-events-none relative z-10 flex flex-col gap-2 px-5 py-5 transition-colors duration-200 group-hover:border-accent/30 group-hover:bg-panel-strong">
-        <div className="flex items-baseline gap-3 text-[13px]">
+      <div
+        className={`panel pointer-events-none relative z-10 h-full overflow-hidden transition-colors duration-200 group-hover:border-accent/30 group-hover:bg-panel-strong ${
+          featured ? "flex flex-col md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]" : ""
+        }`}
+      >
+        <div className={`cover-art ${coverTheme} ${featured ? "min-h-56 md:min-h-full" : "aspect-[2.2/1]"}`}>
+          <span className="cover-grid" aria-hidden="true" />
+          <span className="cover-orbit cover-orbit-one" aria-hidden="true" />
+          <span className="cover-orbit cover-orbit-two" aria-hidden="true" />
+          <span className="cover-label">风不止 / NOTES</span>
+          <span className="cover-index">0{(post.slug.length % 9) + 1}</span>
+        </div>
+
+        <div className={`flex flex-col gap-3 px-5 py-5 ${featured ? "md:justify-center md:px-8 md:py-8" : ""}`}>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px]">
           <time
             dateTime={post.date}
             className="shrink-0 tabular-nums text-muted transition-colors group-hover:text-secondary"
@@ -51,13 +79,12 @@ export function PostCard({ post }: { post: Post }) {
             </span>
           )}
 
-          {/* 标签默认隐藏，悬停淡入 —— 克制的信息层级 */}
           {post.tags && post.tags.length > 0 && (
-            <span className="ml-auto hidden shrink-0 gap-1.5 sm:flex">
+            <span className="ml-auto flex shrink-0 gap-1.5">
               {post.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center rounded border border-border px-1.5 py-1 text-[11px] leading-none text-muted opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                  className="inline-flex items-center rounded-full border border-border px-2 py-1 text-[11px] leading-none text-muted transition-colors group-hover:border-accent/30 group-hover:text-accent"
                 >
                   {tag}
                 </span>
@@ -66,24 +93,20 @@ export function PostCard({ post }: { post: Post }) {
           )}
         </div>
 
-        {/* 用 pl-9 给标题留出左侧空间，横线就长在这块空间里。
-            不加 padding 的话，横线延展会越过边界压到文字上。 */}
-        <h2 className="relative pl-9 text-lg font-semibold leading-snug tracking-tight">
-          {/* 标题前的短横线：悬停时延展，始终停在文字左侧 */}
+        <h2 className={`text-lg font-semibold leading-snug tracking-tight ${featured ? "text-2xl sm:text-3xl" : ""}`}>
           <span
-            aria-hidden
-            className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 bg-accent transition-all duration-200 group-hover:w-6"
-          />
-          <span className="transition-colors group-hover:text-accent">
+            className="transition-colors group-hover:text-accent"
+          >
             <LinkPending>{post.title}</LinkPending>
           </span>
         </h2>
 
         {post.description && (
-          <p className="text-sm leading-relaxed text-secondary opacity-70 transition-opacity duration-200 group-hover:opacity-100">
+          <p className={`text-sm leading-relaxed text-secondary transition-opacity duration-200 ${featured ? "max-w-xl" : "line-clamp-2 opacity-80 group-hover:opacity-100"}`}>
             {post.description}
           </p>
         )}
+        </div>
       </div>
     </article>
   );
