@@ -144,9 +144,14 @@ jobs:
           # next/image 默认会输出 /_next/image?url=... 指向服务端优化接口，
           # 静态产物里没有这个路由，图片会静默 404（顶栏 logo 就是这么丢的）。
           # 一旦有人新增 next/image 用法而忘了 images.unoptimized，这里会拦住。
-          if grep -rq "_next/image" out --include="*.html"; then
+          #
+          # 匹配串带上 ?url=，不能只搜 "_next/image"：
+          # 文章正文里讨论这个坑时会原样写出 /_next/image 这几个字
+          #（3-code-blocks-guide 就是），只搜路径会把正常内容误判成回归。
+          # 优化器生成的 URL 一定带 ?url=，所以这个写法既准又不会漏。
+          if grep -rqE '_next/image\?url=' out --include="*.html"; then
             echo "::error::产物中出现了 /_next/image 引用，静态导出下该路由不存在，图片会 404"
-            grep -rl "_next/image" out --include="*.html" | head -5
+            grep -rlE '_next/image\?url=' out --include="*.html" | head -5
             exit 1
           fi
           ok "无 /_next/image 引用（图片优化器已按要求关闭）"

@@ -2,7 +2,7 @@ export const metadata = {
   title: "语法高亮与代码块",
   date: "2026-10-07",
   publishedAt: "2026-10-07T09:00",
-  description: "Shiki 双主题高亮、复制按钮、语言标签和横向滚动提示的使用说明。",
+  description: "Shiki 双主题高亮、复制按钮、语言标签、折叠长代码和横向滚动提示的使用说明。",
   tags: ["技术", "写作"],
 }
 
@@ -35,6 +35,48 @@ export const metadata = {
 ## 语言标签
 
 左上角显示语言名，纯装饰，不占额外空间。
+
+## 折叠长代码
+
+超过 420px 的代码块，工具条上会多出一个「折叠」按钮。点一下只露出开头九行左右，
+底部有渐变提示下面还有内容，再点一次展开。默认就是展开的，长代码不用管它，
+短代码根本看不到这个按钮。
+
+收起之后按钮会一直显示成「展开」，不再跟着 hover 隐藏。不然唯一的入口就找不到了。
+
+短代码块不给这个按钮。十来行的代码折起来没意义，多一个按钮只会让工具条变吵。
+
+下面这段可以点着试试，它其实是本仓库 CI 里那几条产物断言的本地版：
+
+```bash
+# 把静态导出产物过一遍，确认没有会在托管端 404 的引用
+set -euo pipefail
+
+OUT=out
+PORT=8788
+
+# 导出构建不生成 _next/image 路由，产物里一旦出现就是线上 404
+if grep -rq "_next/image" "$OUT" --include="*.html"; then
+  echo "产物里有 /_next/image 引用" >&2
+  exit 1
+fi
+
+# 每个 <table> 都要有配对的 table-scroll，否则窄屏会整页横向溢出
+tables=$(grep -ro '<table' "$OUT" --include="*.html" | wc -l)
+wrapped=$(grep -ro '<div class="table-scroll">' "$OUT" --include="*.html" | wc -l)
+if [ "$tables" -ne "$wrapped" ]; then
+  echo "有 $((tables - wrapped)) 个表格没包 table-scroll" >&2
+  exit 1
+fi
+
+# sitemap 里没有 <loc> 说明 siteConfig.url 没配
+grep -q "<loc>" "$OUT/sitemap.xml" || { echo "sitemap 是空的" >&2; exit 1; }
+
+echo "产物检查通过，表格 $tables 个"
+python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$OUT"
+```
+
+门槛按渲染高度算，不看行数，所以窄屏上代码折行多，行数少一点也会出现按钮。
 
 ## 横向滚动提示
 
