@@ -63,6 +63,9 @@ export function Comments({ page }: { page: string }) {
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  /** 徽标开关正在提交的那条 id（同一时刻只允许一个在飞，避免连点乱序） */
+  const [badgeBusy, setBadgeBusy] = useState<number | null>(null);
+
   const [reloadKey, setReloadKey] = useState(0);
 
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -276,6 +279,50 @@ export function Comments({ page }: { page: string }) {
     }
   }
 
+  /**
+   * 开关某条的管理员徽标。
+   *
+   * 和后台 admin-dashboard.tsx 里的同名函数逻辑一致（乐观更新 + 失败回滚），
+   * 没抽成共用 hook：两边改的是各自的 state（这里是 comments，后台是 items），
+   * 类型和分页处理也不同，抽出来要为两个调用方做泛型适配，比复制十行更绕。
+   */
+  async function toggleBadge(id: number, next: 0 | 1) {
+    if (badgeBusy !== null) return;
+    setBadgeBusy(id);
+    setNotice("");
+
+    const prev = comments;
+    setComments((list) =>
+      list.map((c) => (c.id === id ? { ...c, admin_badge: next } : c)),
+    );
+
+    try {
+      const res = await fetch("/api/admin/comments", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, admin_badge: next }),
+      });
+
+      if (res.status === 401) {
+        setComments(prev);
+        setIsAdmin(false);
+        setNotice("登录已失效，请重新登录后再试");
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setComments(prev);
+        setNotice(body?.error || "徽标设置失败");
+      }
+    } catch {
+      setComments(prev);
+      setNotice("网络异常，徽标设置失败");
+    } finally {
+      setBadgeBusy(null);
+    }
+  }
+
   /* ------------------------------------------------------------ 渲染 --- */
 
   /** 单条留言的头部：昵称、时间、回复与管理操作 */
@@ -308,13 +355,38 @@ export function Comments({ page }: { page: string }) {
           </button>
 
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => setPendingDelete(pendingDelete === c.id ? null : c.id)}
-              className="text-xs text-muted transition-colors hover:text-red-600 dark:hover:text-red-400"
-            >
-              删除
-            </button>
+            <>
+              {/* 徽标开关挨着「删除」放：管理员在文章页写完自己的回复，
+                  顺手标一下就行，不必跳去 /admin 再搜那条。
+                  开着的状态用金色文字，和昵称旁的徽标同一颜色，
+                  一眼能看出这条当前是开还是关。 */}
+              <button
+                type="button"
+                aria-pressed={Boolean(c.admin_badge)}
+                disabled={badgeBusy === c.id}
+                onClick={() => toggleBadge(c.id, c.admin_badge ? 0 : 1)}
+                className={`text-xs transition-colors ${
+                  c.admin_badge
+                    ? "text-[var(--gold)] hover:text-[var(--gold)]/80"
+                    : "text-muted hover:text-[var(--gold)]"
+                }`}
+                title={
+                  c.admin_badge
+                    ? "点击取消这条的管理员徽标"
+                    : "点击在这条昵称旁显示金色管理员徽标"
+                }
+              >
+                {badgeBusy === c.id ? "设置中…" : c.admin_badge ? "取消徽标" : "加徽标"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPendingDelete(pendingDelete === c.id ? null : c.id)}
+                className="text-xs text-muted transition-colors hover:text-red-600 dark:hover:text-red-400"
+              >
+                删除
+              </button>
+            </>
           )}
         </span>
       </div>
