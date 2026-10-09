@@ -695,19 +695,20 @@
   .cover-index { position: absolute; right: 1.25rem; top: 1rem; font-size: 2.6rem; font-weight: 700; letter-spacing: -0.08em; opacity: 0.7; }
 
   .home-hero { position: relative; }
-  .hero-orbit { position: relative; width: min(100%, 26rem); min-height: 240px; margin-inline: auto; display: grid; place-items: center; }
+  .hero-orbit { --hero-orbit-radius-x: calc(50% - 3rem); --hero-orbit-radius-y: 16%; position: relative; width: min(100%, 26rem); min-height: 240px; margin-inline: auto; display: grid; place-items: center; }
   .hero-orbit::before { position: absolute; width: 11rem; height: 11rem; border-radius: 999px; background: color-mix(in srgb, var(--accent) 8%, transparent); filter: blur(30px); content: ""; animation: hero-aura 5s ease-in-out infinite; }
   .hero-orbit-core { z-index: 2; display: grid; width: 6.25rem; height: 6.25rem; place-items: center; border: 1px solid var(--hero-core-border); border-radius: 999px; background: var(--hero-core-surface); color: var(--foreground); box-shadow: var(--hero-core-shadow); backdrop-filter: blur(8px); animation: hero-core-pulse 4s ease-in-out infinite; }
   .hero-atom { width: 5rem; height: 5rem; animation: hero-atom-float 7s ease-in-out infinite; }
-  .hero-orbit-ring { position: absolute; width: calc(100% - 3rem); height: 46%; border: 1px solid var(--border); border-radius: 50%; }
-  .hero-orbit-ring-one { width: calc(100% - 3rem); height: 58%; border-color: color-mix(in srgb, var(--accent) 30%, transparent); animation: hero-ring-breathe 7s ease-in-out infinite; }
+  .hero-orbit-ring { position: absolute; z-index: 1; width: calc(100% - 3rem); height: 46%; border: 1px solid var(--border); border-radius: 50%; clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%); }
+  .hero-orbit-ring-lower { z-index: 3; clip-path: polygon(0 50%, 100% 50%, 100% 100%, 0 100%); }
+  .hero-orbit-ring-one { width: calc(100% - 6rem); height: 32%; border-color: color-mix(in srgb, var(--accent) 30%, transparent); animation: hero-ring-breathe 7s ease-in-out infinite; }
   .hero-orbit-ring-two { width: 76%; height: 42%; opacity: 0.52; animation: hero-ring-breathe-reverse 9s ease-in-out infinite; }
   /*
     两个电子共用同一条椭圆轨道、同一个周期，只差半个相位：始终中心对称、速度一致。
-    offset-distance 按弧长推进，速度均匀；层级在下半圈切到核之上、上半圈切到之下，
+    offset-distance 按弧长推进，速度均匀；层级在靠近观察者的一侧切到核之上，
     做出绕到核后面的立体感（相位差半圈，一个转到前面时另一个正好转到后面）。
   */
-  .hero-orbit-dot { position: absolute; top: 50%; left: 50%; width: 0.55rem; height: 0.55rem; margin: -0.275rem; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 14%, transparent); offset-path: ellipse(min(32vw, 8rem) min(8vw, 2rem) at 50% 50%); offset-anchor: 50% 50%; offset-rotate: 0deg; animation-name: hero-electron-orbit, hero-electron-depth; animation-duration: 6s; animation-timing-function: linear, step-end; animation-iteration-count: infinite; }
+  .hero-orbit-dot { position: absolute; top: 50%; left: 50%; width: 0.55rem; height: 0.55rem; margin: -0.275rem; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 14%, transparent); offset-path: ellipse(var(--hero-orbit-radius-x) var(--hero-orbit-radius-y) at 50% 50%); offset-anchor: 50% 50%; offset-rotate: 0deg; animation-name: hero-electron-orbit, hero-electron-depth; animation-duration: 6s; animation-timing-function: linear, step-end; animation-iteration-count: infinite; }
   /* 负延迟 = 半个周期，从轨道另一端起步 */
   .hero-orbit-dot-two { background: var(--foreground); animation-delay: -3s; }
 
@@ -743,11 +744,10 @@
     to { offset-distance: 100%; }
   }
 
-  /* step-end 让层级在中点瞬间切换；此时圆点正好在左右顶点，不在核的轮廓上 */
+  /* step-end 让层级在前后半圈之间瞬间切换，形成一前一后的立体感 */
   @keyframes hero-electron-depth {
-    0% { z-index: 3; }
-    50% { z-index: 1; }
-    100% { z-index: 3; }
+    0%, 50% { z-index: 3; }
+    50.1%, 100% { z-index: 1; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -757,8 +757,9 @@
     .hero-orbit-ring-one,
     .hero-orbit-ring-two,
     .hero-orbit-dot { animation: none; }
-    /* 静止时两点分居左右两端 */
-    .hero-orbit-dot-two { offset-distance: 50%; }
+    /* 静止时两点分居核心前后 */
+    .hero-orbit-dot { offset-distance: 25%; z-index: 3; }
+    .hero-orbit-dot-two { offset-distance: 75%; z-index: 1; }
   }
 
   .panel {

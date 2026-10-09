@@ -64,7 +64,9 @@ export default function HomePage() {
             </svg>
           </div>
           <span className="hero-orbit-ring hero-orbit-ring-one" />
+          <span className="hero-orbit-ring hero-orbit-ring-one hero-orbit-ring-lower" />
           <span className="hero-orbit-ring hero-orbit-ring-two" />
+          <span className="hero-orbit-ring hero-orbit-ring-two hero-orbit-ring-lower" />
           <span className="hero-orbit-dot" />
           <span className="hero-orbit-dot hero-orbit-dot-two" />
         </div>
@@ -131,6 +133,33 @@ export default function HomePage() {
         {latest.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {latest.map((post) => <PostCard key={post.slug} post={post} />)}
+            <Link
+              href="/blog"
+              className="panel group flex h-full flex-col overflow-hidden text-center transition-colors duration-200 hover:border-accent/30 hover:bg-panel-strong"
+            >
+              <span
+                className="relative aspect-[2.2/1] w-full overflow-hidden bg-[linear-gradient(135deg,#3f4248,#777b82_52%,#c4c7ca)] text-white/90"
+                aria-hidden="true"
+              >
+                <span className="absolute -right-8 -top-12 h-40 w-40 rounded-full border border-white/40" />
+                <span className="absolute -right-1 -top-5 h-32 w-32 rounded-full border border-white/25" />
+                <span className="absolute -bottom-14 left-8 h-36 w-36 rotate-45 border border-white/30" />
+                <span className="absolute inset-x-0 bottom-0 h-px bg-white/50" />
+                <span className="absolute bottom-4 left-5 text-[10px] font-semibold tracking-[0.24em]">
+                  OPEN ARCHIVE
+                </span>
+                <span className="absolute right-5 top-4 text-4xl font-semibold tracking-[-0.12em] opacity-70">
+                  →
+                </span>
+              </span>
+              <span className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-7">
+                <span className="eyebrow transition-colors group-hover:text-accent">ALL NOTES</span>
+                <span className="text-xl font-semibold tracking-tight transition-colors group-hover:text-accent">
+                  查看全部
+                </span>
+                <span className="text-sm text-muted transition-colors group-hover:text-secondary">浏览所有文章 →</span>
+              </span>
+            </Link>
           </div>
         ) : (
           <p className="py-8 text-sm text-muted">更多文章正在路上。</p>
