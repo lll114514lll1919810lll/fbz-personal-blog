@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { AdminBadge } from "@/components/admin-badge";
 import { absoluteTime, relativeTime } from "@/lib/time";
 
 /**
@@ -29,6 +30,8 @@ type Comment = {
   parent_id: number | null;
   name: string;
   text: string;
+  /** 1 = 管理员在后台给这条开了金色徽标。后端恒返回 0/1，不是布尔 */
+  admin_badge: number;
   created_at: string; // ISO 8601（后端已在 SQL 里转好）
 };
 
@@ -279,7 +282,12 @@ export function Comments({ page }: { page: string }) {
   function renderMeta(c: Comment) {
     return (
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-sm font-medium">{c.name}</span>
+        <span className="flex items-baseline gap-1.5 text-sm font-medium">
+          {c.name}
+          {/* 徽标跟昵称在同一个 span 里：两者是「谁说的」这一个意思的两半，
+              中间那个 gap-x-3（12px）会把它们拆成两组信息。 */}
+          {Boolean(c.admin_badge) && <AdminBadge />}
+        </span>
         <time
           dateTime={c.created_at}
           title={absoluteTime(c.created_at)}

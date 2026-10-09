@@ -27,6 +27,12 @@ CREATE TABLE IF NOT EXISTS comments (
 
   name       TEXT NOT NULL,
 
+  -- 金色管理员徽标：1 = 在这条昵称旁显示「管理员」徽标，0 = 不显示。
+  -- 由管理员在后台逐条开关（PATCH /api/admin/comments）。
+  -- 访客发表时一律是默认值 0：POST /api/comments 的 INSERT 根本不写这一列，
+  -- 所以伪造不了——能改它的只有带登录态的管理接口。
+  admin_badge INTEGER NOT NULL DEFAULT 0,
+
   text       TEXT NOT NULL,
 
   -- 访客 IP 的加盐哈希，仅用于限流，不存原始 IP。

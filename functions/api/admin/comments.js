@@ -2,6 +2,7 @@
  * 管理后台的数据接口。
  *
  *   GET    /api/admin/comments?limit=&offset=&q=&page=   列出留言（含总数）
+ *   PATCH  /api/admin/comments   { id, admin_badge }     开关某条的管理员徽标
  *   DELETE /api/admin/comments?id=<id>                    删除单条（级联删回复）
  *
  * 与面向访客的 /api/comments 分开：
@@ -15,6 +16,7 @@ import {
   deleteCommentCascade,
   hasSession,
   PAGE_RE,
+  readJson,
 } from "../../_lib/api.js";
 
 const DEFAULT_LIMIT = 50;
@@ -65,7 +67,7 @@ export async function onRequestGet({ request, env }) {
     .first();
 
   const rows = await env.DB.prepare(
-    `SELECT id, page, parent_id, name, text,
+    `SELECT id, page, parent_id, name, text, admin_badge,
             strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
        FROM comments
        ${whereSql}
@@ -81,6 +83,50 @@ export async function onRequestGet({ request, env }) {
     offset,
     items: rows.results || [],
   });
+}
+
+/**
+ * 开关某条留言的管理员徽标。
+ *
+ *   PATCH /api/admin/comments   { id, admin_badge }   → { ok, id, admin_badge }
+ *
+ * 只接收这两个字段：徽标是「部分更新」语义，走 PATCH 而不是 POST
+ * （POST 在访客接口那边是「发表」）。值严格校验成 0/1——布尔、字符串
+ * 都拒，避免 SQLite 把 truthy 值悄悄存成 1 之外的东西。
+ */
+export async function onRequestPatch({ request, env }) {
+  if (!(await requireSession(request, env))) {
+    return adminJson({ error: "未登录" }, 401);
+  }
+  if (!env.DB) return adminJson({ error: "缺少 D1 绑定 DB" }, 503);
+
+  const body = await readJson(request);
+  if (!body) return adminJson({ error: "请求格式不对" }, 400);
+
+  const id = Number(body.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return adminJson({ error: "id 不合法" }, 400);
+  }
+  if (body.admin_badge !== 0 && body.admin_badge !== 1) {
+    return adminJson({ error: "admin_badge 只能是 0 或 1" }, 400);
+  }
+
+  // 先确认这条留言存在：D1 的 UPDATE 对不存在的 id 也返回成功（changes: 0），
+  // 不查就会让前端以为开关生效了。
+  const existing = await env.DB.prepare(
+    `SELECT id FROM comments WHERE id = ?1`,
+  )
+    .bind(id)
+    .first();
+  if (!existing) return adminJson({ error: "留言不存在" }, 404);
+
+  await env.DB.prepare(
+    `UPDATE comments SET admin_badge = ?2 WHERE id = ?1`,
+  )
+    .bind(id, body.admin_badge)
+    .run();
+
+  return adminJson({ ok: true, id, admin_badge: body.admin_badge });
 }
 
 export async function onRequestDelete({ request, env }) {

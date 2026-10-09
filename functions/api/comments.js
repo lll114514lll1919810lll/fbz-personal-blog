@@ -49,8 +49,12 @@ async function handle(request, env, url) {
 
     // created_at 统一在 SQL 里转成 ISO 8601（带 T 和 Z），
     // 免得前端还要猜 SQLite datetime() 的 "YYYY-MM-DD HH:MM:SS" 是哪个时区。
+    //
+    // admin_badge 对外可读、不可写：访客界面靠它渲染金色徽标，
+    // 而写入只走管理接口（PATCH /api/admin/comments）。
+    // 下面的 INSERT 刻意不列这一列——新留言永远是 0，请求体伪造不了。
     const res = await env.DB.prepare(
-      `SELECT id, parent_id, name, text,
+      `SELECT id, parent_id, name, text, admin_badge,
               strftime('%Y-%m-%dT%H:%M:%SZ', created_at) AS created_at
          FROM ${TABLE}
         WHERE page = ?1

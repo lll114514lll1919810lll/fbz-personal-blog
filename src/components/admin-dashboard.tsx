@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AdminBadge } from "@/components/admin-badge";
 import { absoluteTime, relativeTime } from "@/lib/time";
 
 /**
@@ -18,6 +19,8 @@ type AdminComment = {
   page: string;
   name: string;
   text: string;
+  /** 1 = 这条昵称旁显示金色管理员徽标。后端恒返回 0/1，不是布尔 */
+  admin_badge: number;
   created_at: string;
 };
 
@@ -46,6 +49,9 @@ export function AdminDashboard() {
   /** 正在等待二次确认删除的那条 id（避免用 window.confirm 的阻塞弹窗） */
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  /** 徽标开关正在提交的那条 id（同一时刻只允许一个在飞，避免连点乱序） */
+  const [badgeBusy, setBadgeBusy] = useState<number | null>(null);
 
   // 搜索防抖：每敲一个字就请求一次太浪费，等停手 300ms 再查
   useEffect(() => {
@@ -130,6 +136,50 @@ export function AdminDashboard() {
     }
   }
 
+  /**
+   * 开关某条的管理员徽标。
+   *
+   * 先改本地 state 再发请求（乐观更新）：这是个开关，点了就该立刻看到
+   * 状态变了；等接口回来再改的话，网络稍慢就有明显的「按下去没反应」。
+   * 失败时回滚到原值并把错误显示出来——回滚比「让它看起来还是开着的」
+   * 诚实，否则管理员会以为徽标已经挂上，实际线上没有。
+   */
+  async function toggleBadge(id: number, next: 0 | 1) {
+    if (badgeBusy !== null) return;
+    setBadgeBusy(id);
+    setError("");
+
+    const prev = items;
+    setItems((list) =>
+      list.map((c) => (c.id === id ? { ...c, admin_badge: next } : c)),
+    );
+
+    try {
+      const res = await fetch("/api/admin/comments", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, admin_badge: next }),
+      });
+
+      if (res.status === 401) {
+        setItems(prev);
+        router.replace("/adminlogin");
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setItems(prev);
+        setError(body?.error || "徽标设置失败");
+      }
+    } catch {
+      setItems(prev);
+      setError("网络异常，徽标设置失败");
+    } finally {
+      setBadgeBusy(null);
+    }
+  }
+
   async function logout() {
     await fetch("/api/admin/session", { method: "DELETE" }).catch(() => {});
     router.replace("/adminlogin");
@@ -191,7 +241,12 @@ export function AdminDashboard() {
               className="panel rounded-[var(--radius-panel)] px-5 py-4"
             >
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="text-sm font-medium">{c.name}</span>
+                <span className="flex items-baseline gap-1.5 text-sm font-medium">
+                  {c.name}
+                  {/* 后台同步显示徽标：管理员要能确认「这条真的挂上了」，
+                      而不是只在访客视角里才看得见 */}
+                  {Boolean(c.admin_badge) && <AdminBadge />}
+                </span>
                 <time
                   dateTime={c.created_at}
                   title={absoluteTime(c.created_at)}
@@ -216,6 +271,33 @@ export function AdminDashboard() {
               </p>
 
               <div className="mt-3 flex items-center justify-end gap-2">
+                {/* 徽标开关放左边、和删除分开一组：两者后果轻重完全不同
+                    （一个可逆、一个连带删回复），挤在一起容易误点删除。
+                    aria-pressed 而不是 checkbox：它视觉上是个按钮，
+                    语义是「这个标记开没开」，读屏念「已按下」最贴切。 */}
+                <button
+                  type="button"
+                  aria-pressed={Boolean(c.admin_badge)}
+                  disabled={badgeBusy === c.id}
+                  onClick={() =>
+                    toggleBadge(c.id, c.admin_badge ? 0 : 1)
+                  }
+                  className={`btn-pill mr-auto ${
+                    c.admin_badge ? "text-[var(--gold)]" : ""
+                  }`}
+                  title={
+                    c.admin_badge
+                      ? "点击取消这条的管理员徽标"
+                      : "点击在这条昵称旁显示金色管理员徽标"
+                  }
+                >
+                  {badgeBusy === c.id
+                    ? "设置中…"
+                    : c.admin_badge
+                      ? "取消徽标"
+                      : "加徽标"}
+                </button>
+
                 {pendingDelete === c.id ? (
                   <>
                     <span className="text-xs text-muted">确定删除？</span>

@@ -44,8 +44,15 @@
   --muted: #63636d; /* 装饰与占位   6.0:1（压深过：原 #71717a 在纯白上只有 4.6:1，
                        现在面板压在背景图上会带底色，完全不够余量） */
   --border: #e4e4e7;
-  --accent: #2563eb; /* 全站唯一强调色 */
+  --accent: #2563eb; /* 全站唯一强调色（金色徽标是唯一的例外，见 --gold） */
   --accent-soft: #eff6ff;
+  /* 管理员金色徽标：全站唯一的第二种彩色，只给这一个标记用。
+     浅色下用金棕而不是亮金——亮金（#eab308 一类）压在面板上只有
+     2.6:1，小字根本读不清；压深到 #8a5a00 后最差 4.95:1（AA 达标），
+     仍然是明显的「金」色相。文字压在淡金底 #fdf3d7 上 5.36:1。
+     深色主题反过来用亮金 #f0b429（压深色面板 ≥8:1）。 */
+  --gold: #8a5a00;
+  --gold-soft: #fdf3d7;
 
   /* --- 亚克力面板 --- */
   /* 面板底色带透明度：这是「亚克力」的核心，背景图能从下面透出来。
@@ -120,6 +127,11 @@
     --border: #26262a;
     --accent: #60a5fa;
     --accent-soft: #172033;
+    /* 深色下反过来用亮金：面板是深色底，压深的金棕会糊进去；
+       #f0b429 压深色面板实测 ≥8:1。底色取亮金的低透明度叠加，
+       不用实色，免得在小面积上像贴了块膏药。与下面那份逐字一致。 */
+    --gold: #f0b429;
+    --gold-soft: rgb(240 180 41 / 0.14);
 
     /* 深色下提高不透明度：深色面板透出亮背景图时文字最容易糊 */
     --panel-bg: rgb(22 22 26 / 0.74);
@@ -162,6 +174,11 @@
   --border: #26262a;
   --accent: #60a5fa;
   --accent-soft: #172033;
+  /* 深色下反过来用亮金：面板是深色底，压深的金棕会糊进去；
+     #f0b429 压深色面板实测 ≥8:1。底色取亮金的低透明度叠加，
+     不用实色，免得在小面积上像贴了块膏药。与上面那份逐字一致。 */
+  --gold: #f0b429;
+  --gold-soft: rgb(240 180 41 / 0.14);
 
   --panel-bg: rgb(22 22 26 / 0.74);
   --panel-bg-strong: rgb(22 22 26 / 0.88);
@@ -601,6 +618,39 @@
     border-color: var(--accent);
     color: var(--accent);
     background: var(--accent-soft);
+  }
+
+  /* 金色「管理员」徽标：贴在留言昵称右边的一枚小标记。
+     刻意不做成 .tag-chip 的变体——那个有 2rem 触控热区，是给可点的
+     筛选标签用的；徽标不可点，跟着它会长成一个空心的大胶囊，
+     反而抢了昵称的视觉重量。所以这里自己定一套紧凑尺寸。
+
+     font-weight 600 + 0.68rem：徽标要在 13px 昵称旁边仍然读得出来，
+     但字号一旦超过昵称就会喧宾夺主，靠加粗而不是加大来建立层级。
+
+     边框用 currentColor 的淡出而不是 --border：--border 是中性灰，
+     配金色文字会出现「字是金的、框是灰的」两套语言。 */
+  .admin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.22em;
+    border: 1px solid color-mix(in srgb, var(--gold) 38%, transparent);
+    border-radius: 999px;
+    background: var(--gold-soft);
+    color: var(--gold);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    padding: 0.08em 0.5em;
+    /* 这里刻意不写 vertical-align：两个调用方都把徽标放在
+       display: flex + align-items: baseline 的昵称容器里，而
+       vertical-align 对 flex 项目无效——写了也不生效，只会让人以为
+       对齐是它管的。实际对齐由父容器的 baseline 决定。 */
+  }
+
+  .admin-badge svg {
+    flex: none;
   }
 
   .cover-art {

@@ -111,6 +111,11 @@ pnpm preview:cf
 评论功能需要 Cloudflare D1 和 `.dev.vars` 中的 `ADMIN_KEY`、`IP_SALT`；
 密钥不要提交到仓库。评论、管理后台和数据库迁移的完整操作以项目实际配置为准。
 
+管理员登录后可在后台逐条给留言挂一枚金色「管理员」徽标（显示在昵称旁，
+用于标出站方自己的回复）。开关走 `PATCH /api/admin/comments`，访客的发表
+接口不接收这个字段，伪造不了。已有数据库需要跑一次
+`db/migrations/0002-add-admin-badge.sql` 加列。
+
 ## 设计说明
 
 博客的视觉、交互和静态架构取舍，集中写在站内文章：
