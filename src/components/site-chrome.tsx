@@ -68,10 +68,14 @@ export function SiteFooter() {
   return (
     /* 同样直角通栏，贴住屏幕下沿；只留上边框作为分隔。
        不在 footer 上加 pt——那是面板内部的padding，会把半透明底
-       往上延伸；与正文之间的空隙由 main 的底部内边距提供。 */
+       往上延伸；与正文之间的空隙由 main 的底部内边距提供。
+
+       纵向内边距 py-4（原来是 py-6）：页脚只是版权和授权两行小字，
+       24px 上下留白让它看起来像第二块内容面板，抢了正文的注意力。
+       收到 16px 后整条更像一条收尾的分隔线。 */
     <footer className={`${BAR} mt-auto w-full border-b-0`}>
       <div
-        className="mx-auto flex flex-col gap-3 px-6 py-6 text-[13px] text-muted sm:flex-row sm:items-end sm:justify-between"
+        className="mx-auto flex flex-col gap-3 px-6 py-4 text-[13px] text-muted sm:flex-row sm:items-end sm:justify-between"
         style={{ maxWidth: CONTENT_MAX_WIDTH }}
       >
         <div className="flex flex-col gap-1">
