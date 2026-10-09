@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CONTENT_MAX_WIDTH, navLinks, siteConfig } from "@/lib/site";
+import { CONTENT_MAX_WIDTH, LICENSE, navLinks, siteConfig } from "@/lib/site";
 import { LinkPending } from "@/components/link-pending";
 import { SiteLogo } from "@/components/site-logo";
 import { SiteSearch } from "@/components/site-search";
@@ -71,13 +71,48 @@ export function SiteFooter() {
        往上延伸；与正文之间的空隙由 main 的底部内边距提供。 */
     <footer className={`${BAR} mt-auto w-full border-b-0`}>
       <div
-        className="mx-auto flex flex-col gap-1 px-6 py-6 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between"
+        className="mx-auto flex flex-col gap-3 px-6 py-6 text-[13px] text-muted sm:flex-row sm:items-end sm:justify-between"
         style={{ maxWidth: CONTENT_MAX_WIDTH }}
       >
-        <p>
-          © {new Date().getFullYear()} {siteConfig.author}
+        <div className="flex flex-col gap-1">
+          <p>
+            © {new Date().getFullYear()} {siteConfig.author}
+          </p>
+          <p>风不止，但行有恒。</p>
+        </div>
+
+        {/* 授权声明放在页脚而不是关于页：转载的人通常只翻到这个站最底部，
+            才会去找「能不能转」的答案。写在这里，被爬到的概率最高。
+
+            两条拆成两个链接而不是拼成一串：读者多半只关心自己那一档
+            （想拿主题？点 MIT；想转文章？点 CC），分开点更省事。
+
+            文字写「内容 / 源码」而不是「文章 / 代码」：
+            页脚一行放不下长句子，短词在 320px 上也不会折行。 */}
+        <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="whitespace-nowrap">
+            内容 ·{" "}
+            <a
+              href={LICENSE.contentUrl}
+              target="_blank"
+              rel="noreferrer license"
+              className="transition-colors hover:text-foreground"
+            >
+              {LICENSE.content}
+            </a>
+          </span>
+          <span className="whitespace-nowrap">
+            源码 ·{" "}
+            <a
+              href={LICENSE.codeUrl}
+              target="_blank"
+              rel="noreferrer license"
+              className="transition-colors hover:text-foreground"
+            >
+              {LICENSE.code}
+            </a>
+          </span>
         </p>
-        <p>风不止，但行有恒。</p>
       </div>
     </footer>
   );

@@ -2,6 +2,21 @@
 
 Next.js 16 + TypeScript + Tailwind CSS v4 搭建的个人博客，中文界面，MDX 写作。
 
+## 授权
+
+这个仓库是「代码」和「内容」两套授权并行：
+
+| 范围 | 协议 | 文件 |
+| --- | --- | --- |
+| 源码：主题、组件、配置、脚本 | [MIT](./LICENSE) | `LICENSE` |
+| 文章正文：`src/content/*.mdx` | [CC BY-NC-SA 4.0](./CONTENT-LICENSE.md) | `CONTENT-LICENSE.md` |
+| 文章里引用的代码片段 | 按 MIT 处理 | `LICENSE` |
+
+一句话版本：**主题随你改、可以商用；文章要署名、不能商用、改了再发得用同一协议。**
+
+分开授权的理由见 `CONTENT-LICENSE.md` 开头。页脚常驻这两条协议的链接，
+转载的人通常只翻到站底才去找「能不能转」。
+
 ## 快速开始
 
 ```bash
@@ -116,6 +131,11 @@ export const metadata = {
 > 注意：元信息用的是 `export const metadata = {...}` 这种 JavaScript 写法，
 > 不是常见的 YAML frontmatter（`---` 包裹那种）。这是 `@next/mdx` 原生支持的方式，
 > 不需要额外装解析 frontmatter 的库。
+
+> **新建的文章自动带上 `CC BY-NC-SA 4.0` 授权**（见 `CONTENT-LICENSE.md`）：
+> 别人可以转载、翻译、改写，但要署名、不能商用、衍生作品得沿用同一协议。
+> 不想按这个协议发布某篇文章，就把文件单独授权说明写清楚——协议只覆盖
+> 没另外声明的内容。
 
 ## 改站点信息
 

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { siteConfig } from "@/lib/site";
+import { LICENSE, siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "关于",
@@ -76,6 +76,30 @@ export default function AboutPage() {
             <strong>阅读体验</strong>：文章带目录、阅读进度条和上下篇导航，明暗配色跟随系统
           </li>
         </ul>
+
+        <h2>转载与引用</h2>
+        <p>
+          这个站分两部分授权。**主题代码**用{" "}
+          <a href={LICENSE.codeUrl} target="_blank" rel="noreferrer">
+            MIT
+          </a>
+          ，随你改、可以商用；**文章正文**用{" "}
+          <a href={LICENSE.contentUrl} target="_blank" rel="noreferrer">
+            CC BY-NC-SA 4.0
+          </a>
+          ，转载和翻译都欢迎，但要署名、不能商用，改了再发得沿用同一协议。
+        </p>
+        <p>
+          细节写在仓库的{" "}
+          <a
+            href={`${siteConfig.repo}/blob/main/CONTENT-LICENSE.md`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            CONTENT-LICENSE.md
+          </a>
+          ，页脚也常驻这两条链接。文章里引用的代码片段按 MIT 处理，直接拿去用即可。
+        </p>
 
         <h2>关于我</h2>
         <p>
