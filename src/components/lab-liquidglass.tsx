@@ -99,19 +99,25 @@ const MAX_PANELS = 24;
 const MIN_SIDE = 64;
 
 /**
- * 圆角在遮罩纹理里至少要有这么多像素，否则跳过这块面板。
+ * 圆角在遮罩纹理里至少要有这么多像素，否则这块面板改走便宜版。
  *
  * 渲染器给每块玻璃生成一张**方形**遮罩纹理（把整个元素归一化到一张
  * texSize × texSize 的图里，texSize 上限 1024，再乘 capsuleSdfQuality），
  * 圆角在这张图里能占到的像素数 = radius × (texSize / 元素最长边)。
  *
- * 实测：832×31896 的长文面板，14px 圆角只占 0.2 个像素，圆角被量化成直角，
- * 画出来就是一个方角玻璃盖住了面板的圆角；而 832×6381 的面板占约 1.1 个像素，
- * 看着是正常的。所以门槛取 0.5：低于它的直接不上玻璃，维持面板原本的圆角。
+ * 实测（都在**生产构建**下、dpr 1.5）：
+ *   - 832×31896：圆角占 0.2 像素，被量化成直角，方角玻璃盖住了面板的圆角；
+ *   - 832×10080：占 0.71 像素，不只是圆角变方——玻璃整块画成了一个
+ *     **三角形**，面板上横着一条对角边，静态下就很明显；
+ *   - 832×6381：占 1.12 像素，正常。
+ *
+ * 门槛因此取 1：圆角连一个纹素都占不到时，这套 WebGL 几何就不该再用，
+ * 交给便宜版（SVG 滤镜，没有这项限制）。原来写 0.5 是只按「圆角变方」
+ * 定的，三角形那个更难看的表现落在了门槛之上。
  */
-const MIN_RADIUS_TEXELS = 0.5;
+const MIN_RADIUS_TEXELS = 1;
 
-/** 复刻渲染器選 texSize 的规则（continuous-mask.ts），只取判断需要的部分 */
+/** 复刻渲染器选 texSize 的规则（continuous-mask.ts），只取判断需要的部分 */
 function radiusTexels(width: number, height: number, radius: number, dpr: number): number {
   const maxDim = Math.max(width, height) * dpr;
   let base = 128;
