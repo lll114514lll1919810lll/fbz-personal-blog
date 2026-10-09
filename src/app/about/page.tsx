@@ -79,18 +79,26 @@ export default function AboutPage() {
 
         <h2>转载与引用</h2>
         <p>
-          这个站分两部分授权。**主题代码**用{" "}
+          这个站分两部分授权。<strong>主题代码</strong>用{" "}
           <a href={LICENSE.codeUrl} target="_blank" rel="noreferrer">
             MIT
           </a>
-          ，随你改、可以商用；**文章正文**用{" "}
+          ，随你改、可以商用；<strong>文章正文</strong>用{" "}
           <a href={LICENSE.contentUrl} target="_blank" rel="noreferrer">
             CC BY-NC-SA 4.0
           </a>
           ，转载和翻译都欢迎，但要署名、不能商用，改了再发得沿用同一协议。
         </p>
         <p>
-          细节写在仓库的{" "}
+          本站源码仓库链接在{" "}
+          <a 
+            href={siteConfig.repo}
+            target="_blank"
+            rel="noreferrer"
+          >
+            这里
+          </a>
+          {" "}，细节写在仓库的{" "}
           <a
             href={`${siteConfig.repo}/blob/main/CONTENT-LICENSE.md`}
             target="_blank"
@@ -98,12 +106,12 @@ export default function AboutPage() {
           >
             CONTENT-LICENSE.md
           </a>
-          ，页脚也常驻这两条链接。文章里引用的代码片段按 MIT 处理，直接拿去用即可。
+          {" "}。文章里引用的代码块按 MIT 处理，直接拿去用即可。
         </p>
 
         <h2>关于我</h2>
         <p>
-          一个热爱技术、喜欢分享的开发者。你可以在{" "}
+          一个热爱技术与 AI 、喜欢分享的普通人。你可以在{" "}
           <a
             href={siteConfig.github}
             target="_blank"
