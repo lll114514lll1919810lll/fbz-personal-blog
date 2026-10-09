@@ -116,6 +116,36 @@ pnpm preview:cf
 接口不接收这个字段，伪造不了。已有数据库需要跑一次
 `db/migrations/0002-add-admin-badge.sql` 加列。
 
+## 实验室
+
+底栏右端有一个「实验室」（`/lab`）入口，用来放还没定稿的外观实验。
+选择只存在访问者自己的浏览器里（`localStorage`），默认全默认，恢复默认后
+页面立刻变回去。
+
+实验清单在 `src/lib/labs.ts` 的 `LABS` 里，目前支持三种形态：
+
+| 形态 | 说明 |
+| --- | --- |
+| `kind: "switch"` | 开关型，开 / 关两态 |
+| `kind: "choice"` | 档位型，从固定几档里选一个（页面用原生 `<select>`） |
+| `group` | 互斥组：同组实验只能开一个，开了新的会自动关掉旧的 |
+| `runtime` | 需要客户端代码才生效的实验（WebGL 那类），由 `components/lab-runtimes.tsx` 挂载 |
+
+状态写在 `<html>` 上，每个实验一个属性：`data-lab-flat="on"`、
+`data-lab-corners="round"`；默认档不写属性。属性由 `lib/labs.ts` 的内联脚本
+在首次绘制前写好，所以刷新也不会闪一帧默认外观。
+
+加一个纯 CSS 的实验只需动两个地方：`LABS` 里加一项，再在
+`src/app/globals.css` 末尾加一段 `:root[data-lab-<id>="<值>"]` 的覆盖规则。
+运行时型的实验还要在 `lab-runtimes.tsx` 里注册一个组件。
+
+目前唯一一个运行时实验是「液态玻璃」：它用
+[@ybouane/liquidglass](https://github.com/ybouane/liquidglass)（MIT）把面板
+换成真玻璃——库要求玻璃元素是它 root 的直接子元素，而本站面板是嵌套的，
+所以做法是给每块面板垫一块同位置同尺寸的「玻璃底板」，面板自己转成透明底
+（见 `components/lab-liquidglass.tsx` 的说明）。参数取自演示页的
+Regular Glass（浅色）与 Dark Glass（深色）两套预设。
+
 ## 设计说明
 
 博客的视觉、交互和静态架构取舍，集中写在站内文章：

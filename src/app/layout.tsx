@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { ReadingProgress } from "@/components/reading-progress";
 import { PageTransition } from "@/components/page-transition";
+import { LabRuntimes } from "@/components/lab-runtimes";
+import { LABS_INIT_SCRIPT } from "@/lib/labs";
 import { siteConfig } from "@/lib/site";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
@@ -27,8 +29,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* 必须在 <head> 里同步执行：脚本跑完才开始渲染 body，
             深色用户不会先看到一帧白底。见 lib/theme.ts 的说明。 */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* 同理，实验室开关也要在首次绘制前写好 <html data-labs>，
+            否则开了实验的人每次进站都会先闪一帧默认外观。
+            它和主题脚本各管一个属性，互不读写，顺序无所谓。 */}
+        <script dangerouslySetInnerHTML={{ __html: LABS_INIT_SCRIPT }} />
       </head>
       <body className="flex min-h-full flex-col">
+        {/* 运行时型的实验室实验（WebGL 那类）自己铺一层 fixed 的背景，
+            放在最前面只是为了 DOM 顺序好看——它是 z-index:-1，
+            画在正文下面，和后面的兄弟节点不抢位置。 */}
+        <LabRuntimes />
         <ReadingProgress />
         {/* 顶栏和底栏在 PageTransition 之外，切换页面时保持静止 */}
         <SiteHeader />

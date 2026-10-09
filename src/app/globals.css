@@ -46,6 +46,25 @@
   --border: #e4e4e7;
   --accent: #2563eb; /* 全站唯一强调色（金色徽标是唯一的例外，见 --gold） */
   --accent-soft: #eff6ff;
+  /* 开关（主题开关 + 实验室开关）的一套配色令牌。
+
+     浅色下用比 --accent 浅一档的蓝（#3b82f6 对 #2563eb）：强调色是给文字
+     用的，压成实心滑块显得沉。图标仍是反白（--background），没有跟着改成
+     深色——白图标压在浅蓝上实测 3.68:1，达到非文本图形的 3:1，看着也更清爽。
+     深色主题反过来：那边白滑块才是与面板对比最强的（两份深色令牌里都写）。
+
+     两个值是一组，改一个要连另一个一起算：
+       --switch-knob   滑块填充
+       --switch-track  轨道
+
+     实测（check-theme.cjs 会断言）：
+       滑块 / 轨道           #3b82f6 / #ececef = 3.12:1（≥3）
+       白图标 / 滑块         #ffffff / #3b82f6 = 3.68:1（≥3，非文本图形）
+       另一枚图标 / 轨道     #63636d / #ececef = 5.04:1（≥3）
+     轨道从 --border（#e4e4e7）提亮到 #ececef 是这次一起做的：滑块变浅之后，
+     原来的轨道只有 2.96:1，正好压在 3:1 门槛下面。想再浅就还得提轨道。 */
+  --switch-knob: #3b82f6;
+  --switch-track: #ececef;
   /* 管理员金色徽标：全站唯一的第二种彩色，只给这一个标记用。
      浅色下用金棕而不是亮金——亮金（#eab308 一类）压在面板上只有
      2.6:1，小字根本读不清；压深到 #8a5a00 后最差 4.95:1（AA 达标），
@@ -127,6 +146,9 @@
     --border: #26262a;
     --accent: #60a5fa;
     --accent-soft: #172033;
+    /* 深色下开关用前景色（近白）做滑块，与下面 :root[data-theme="dark"] 那份一致 */
+    --switch-knob: var(--foreground);
+    --switch-track: var(--border);
     /* 深色下反过来用亮金：面板是深色底，压深的金棕会糊进去；
        #f0b429 压深色面板实测 ≥8:1。底色取亮金的低透明度叠加，
        不用实色，免得在小面积上像贴了块膏药。与下面那份逐字一致。 */
@@ -174,6 +196,9 @@
   --border: #26262a;
   --accent: #60a5fa;
   --accent-soft: #172033;
+  /* 与上面媒体查询块里那份一致，改一处必须改两处 */
+  --switch-knob: var(--foreground);
+  --switch-track: var(--border);
   /* 深色下反过来用亮金：面板是深色底，压深的金棕会糊进去；
      #f0b429 压深色面板实测 ≥8:1。底色取亮金的低透明度叠加，
      不用实色，免得在小面积上像贴了块膏药。与上面那份逐字一致。 */
@@ -877,7 +902,7 @@
        漏掉这条时图标会从轨道边缘开始排，与滑块差 2px（实测出来的）。 */
     padding: 0.125rem;
     border-radius: 999px;
-    background-color: var(--border);
+    background-color: var(--switch-track);
     /* 内凹阴影给轨道「槽」的感觉，让滑块看起来是嵌在里面的 */
     box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
     transition: background-color 200ms ease;
@@ -890,7 +915,7 @@
     width: 1.25rem; /* 20px */
     height: 1.25rem;
     border-radius: 999px;
-    background-color: var(--foreground);
+    background-color: var(--switch-knob);
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.28);
     /* 滑动是这枚开关唯一的主要动效，给足时长才看得出「拨过去」的意味 */
     transition: transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -907,7 +932,9 @@
     transition: color 200ms ease;
   }
 
-  /* 默认（浅色）状态：滑块在左，太阳反白压在上面 */
+  /* 默认（浅色）状态：滑块在左，太阳反白压在上面。
+     反白在浅蓝滑块上是 3.68:1，够非文本图形的 3:1；
+     真要压到 4.5 就得把滑块调回 #2563eb 那么深，与「浅一点」冲突。 */
   .theme-switch-sun {
     color: var(--background);
   }
@@ -940,6 +967,214 @@
     color: var(--background);
   }
 
+  /* ==========================================================================
+     实验室开关（/lab 页）
+
+     和主题开关长得像但是两件事：主题开关是二选一的常态，位置由
+     <html data-theme> 决定；这里是可叠加的实验，每行一枚、各自独立。
+     所以状态挂在按钮自己的 aria-checked 上（React 直接写 DOM），
+     不依赖任何全局属性。
+
+     只用现有令牌配色，不引入新颜色：
+       轨道 = --border，滑块 = --foreground，开着时轨道变 --accent。
+     按钮 44×44 的命中区和主题开关一致，视觉上的轨道只有 40×24。
+     ========================================================================== */
+
+  .lab-switch {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    place-items: center;
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .lab-switch-track {
+    position: relative;
+    display: block;
+    width: 2.5rem; /* 40px */
+    height: 1.5rem; /* 24px */
+    border-radius: 999px;
+    background-color: var(--switch-track);
+    /* 内凹阴影，和主题开关的轨道保持同一种「槽」的质感 */
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+    transition: background-color 200ms ease;
+  }
+
+  .lab-switch-knob {
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 1.25rem; /* 20px */
+    height: 1.25rem;
+    border-radius: 999px;
+    background-color: var(--switch-knob);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.28);
+    transition: transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  .lab-switch[aria-checked="true"] .lab-switch-track {
+    background-color: var(--accent);
+  }
+
+  .lab-switch[aria-checked="true"] .lab-switch-knob {
+    /* 40 - 2×2(内边距) - 20(滑块) = 16px = 1rem */
+    transform: translateX(1rem);
+    background-color: var(--background);
+  }
+
+  .lab-switch:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* 档位型实验用的下拉。外面这层只为放箭头，select 本身撑满 */
+  .lab-select-wrap {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+  }
+
+  .lab-select {
+    /* appearance:none 去掉系统外观，箭头由 .lab-select-caret 画，
+       这样两端的配色、圆角、高度才和其它控件一致。
+       注意去掉系统外观后，下拉展开的菜单仍然是系统绘制的——
+       那部分浏览器不允许自绘，接受这个落差，别去自绘假下拉。 */
+    appearance: none;
+    min-height: 2.75rem; /* 和主题开关、按钮一致的 44px 命中高度 */
+    padding: 0 2.1rem 0 0.85rem;
+    border: 1px solid var(--panel-border);
+    border-radius: 0.6rem;
+    background-color: var(--panel-bg-raised);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    transition: border-color 180ms ease;
+  }
+
+  .lab-select-caret {
+    position: absolute;
+    right: 0.7rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    color: var(--muted);
+    /* 箭头是纯装饰，点在它上面要能穿透到下层的 select */
+    pointer-events: none;
+  }
+
+  @media (hover: hover) {
+    .lab-select:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--panel-border));
+    }
+  }
+
+  .lab-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* --- 列表结构：分组与分隔线 ---------------------------------------------
+     这些是列表自身的骨架，不是实验效果，所以放在 components 层里，
+     和 .lab-switch / .lab-select 待在一起。 */
+
+  :root {
+    /* 分隔线和分组框的线色。
+       不用 --border：它是 7% 的黑，压在半透明面板 + 亮背景图上几乎看不见
+       （用户反馈「分隔条能见度太低」）。
+       改用前景色调出来的线，深浅两个主题各自成立：
+       浅色是比 --border 更实的灰，深色是比 --border 更亮的灰。 */
+    --lab-divider: color-mix(in srgb, var(--foreground) 22%, transparent);
+  }
+
+  .lab-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* 互斥组的成员套一层内嵌面板。
+     只有小标题不够：标题下面那几行和「独立实验」那几行长得一模一样，
+     读者会把两组看成一组。框是这条边界唯一说得清的画法。 */
+  .lab-list.is-grouped {
+    border: 1px solid var(--lab-divider);
+    border-radius: var(--radius-panel);
+    background-color: var(--panel-bg-raised);
+    padding: 1rem 1.1rem;
+  }
+
+  .lab-group-title {
+    color: var(--secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .lab-row + .lab-row {
+    border-top: 1px solid var(--lab-divider);
+    padding-top: 1rem;
+  }
+
+  /* --- 液态玻璃底板（运行时实验，见 components/lab-liquidglass.tsx） ------
+     库要求玻璃元素是 root 的直接子元素，而本站的面板嵌在 main 和卡片网格里，
+     所以面板本身交不出去：这里改成给每块面板垫一块同位置同尺寸的「玻璃底板」，
+     面板自己由下面的规则转成透明底，玻璃就透出来了。
+
+     root 铺在正文下面（z-index:-1），位置用文档坐标——底板和面板在同一个
+     坐标系里一起滚，滚动时不需要任何重算。 */
+  .lab-lg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    /* 整层只是背景，不能吃掉正文的点击 */
+    pointer-events: none;
+  }
+
+  /* 背景图固定在视口上，复刻 body 的 background-attachment: fixed。
+     库走 <img> 的 drawImage 快速通道，不认 CSS 的 background-* 属性，
+     所以 cover / 居中这些得写在 object-fit 上。 */
+  .lab-lg-bg {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  /* 一块底板 = 一块面板。
+     位置和尺寸由 JS 按面板算好写进内联样式，这里只管观感。
+     淡入放在底板上而不是整层上：层上加 opacity 会让它成为 fixed 定位的
+     包含块，吸顶顶栏那块固定在视口上的底板就会跟着跑偏。 */
+  .lab-lg-plate {
+    /*
+      这一行是整块实验能不能看见的关键，别删。
+
+      库往玻璃元素里注入的 canvas 带 `z-index: -1`。而负 z-index 的后代
+      会「逃」到最近的那个层叠上下文里，按规矩画在该上下文的最底层——
+      也就是排在同层的背景 <img> 下面，于是玻璃被背景图整个盖住。
+
+      只有 position: fixed 的元素才会自动成为层叠上下文。顶栏底板是 fixed
+      （它对应的顶栏是 sticky），所以一直正常；其余底板是 absolute +
+      z-index: auto，全都白画了（实测：开关「液态玻璃」后页面几乎不变，
+      而且改任何参数屏幕都不动，因为那层输出根本没露出来）。
+
+      isolation: isolate 就地建一个层叠上下文，代价最小，
+      不像 z-index 会顺带改变自己的层叠次序。
+    */
+    isolation: isolate;
+    opacity: 0;
+    transition: opacity 400ms ease;
+  }
+
+  .lab-lg-layer[data-ready="on"] .lab-lg-plate {
+    opacity: 1;
+  }
   /**
    * 降级一：浏览器不支持 backdrop-filter（老 Firefox 等）。
    * 直接用不透明底色，牺牲通透感换可读性。
@@ -1976,4 +2211,127 @@ html {
 .btn-pill:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ============================================================================
+   实验室：可以叠着开的外观实验
+
+   规则挂在 <html data-lab-<id>="<值>"> 上，属性由 lib/labs.ts 的内联脚本
+   在首次绘制前写好，所以开着的实验不会闪一帧默认外观。
+
+   每个实验一个属性，而不是全部塞进一个空格分隔的列表：
+   列表只能表达「在不在里面」，而档位型的值是 round / square 这种字符串，
+   得靠 [data-lab-corners="round"] 才选得中。一种写法覆盖两种形态，
+   新增实验时不用先想「它该用哪种属性」。
+
+   这一段写在文件最末尾、并且不进任何 @layer，是有意的：
+   Tailwind v4 里**无层样式的优先级高于任何层**，而实验室要做的事恰恰是
+   覆盖 .panel 这类已经在 @layer components 里的规则，还要能压过组件上的
+   工具类（比如某个面板自己写的 rounded-none）。放进层里就得靠 !important
+   或者堆选择器，反而更难维护。
+
+   新增实验的步骤：lib/labs.ts 的 LABS 里加一项，然后在下面加一段
+   :root[data-lab-<id>="<值>"] 的覆盖规则。其它文件都不用动。
+   ========================================================================= */
+
+/* --- 互斥组「面板材质」 ---------------------------------------------------
+   两个实验回答的是同一个问题（面板表面长什么样），所以同组只能开一个。
+   互斥由 lib/labs.ts 的 setLab 统一处理，这里不用写任何「谁和谁冲突」的规则。
+
+   两者都只改令牌，不去逐个组件写覆盖——面板的观感本来就全部由这几个令牌
+   驱动，改令牌等于一次性改掉全站所有面板，也不会漏掉某个角落。
+
+   注意 --panel-shadow 不能写成 none：.panel 里是
+   `box-shadow: inset 0 1px 0 var(--panel-highlight), var(--panel-shadow)`，
+   这是一条阴影列表，列表里出现 none 会让整条声明失效（阴影反而还在）。
+   所以用一个「零尺寸 + 全透明」的阴影占位。 */
+
+/* 实底：把亚克力换成「纸」，没有高光和投影，边界靠面板底色和背景的明暗差 */
+:root[data-lab-flat="on"] {
+  --panel-bg: var(--background);
+  --panel-bg-strong: var(--background);
+  --panel-bg-raised: var(--surface);
+  --panel-highlight: transparent;
+  --panel-shadow: 0 0 0 0 transparent;
+  --panel-blur: 0px;
+  --panel-saturate: 100%;
+}
+
+/* 描边：反过来，面板几乎透明，边界完全靠那一圈线画出来。
+   底色留了三成不透明，而不是全透明——正文直接压在背景图上时，
+   亮暗完全不可控，面板留一点底能把可读性兜住。 */
+:root[data-lab-outline="on"] {
+  --panel-bg: color-mix(in srgb, var(--background) 32%, transparent);
+  --panel-bg-strong: color-mix(in srgb, var(--background) 52%, transparent);
+  --panel-bg-raised: color-mix(in srgb, var(--background) 28%, transparent);
+  --panel-border: color-mix(in srgb, var(--foreground) 42%, transparent);
+  --panel-highlight: transparent;
+  --panel-shadow: 0 0 0 0 transparent;
+  --panel-blur: 0px;
+  --panel-saturate: 100%;
+}
+
+/* --- 档位「圆角」 ---------------------------------------------------------
+   三档：默认（不写属性）/ 直角 / 圆润。默认档没有规则，就是因为「不写属性」
+   本身就是默认值，不需要再抄一遍 14px。 */
+:root[data-lab-corners="square"] {
+  --radius-panel: 0px;
+}
+
+:root[data-lab-corners="round"] {
+  --radius-panel: 26px;
+}
+
+/* 直角档还要把圆角控件一并拉直，否则面板里嵌着一排胶囊会显得没对齐。
+   有意不碰头像、首页原子这类「本来就是圆的图形」——它们不是面板，
+   拉直只会看起来像坏了。 */
+:root[data-lab-corners="square"] .btn-pill,
+:root[data-lab-corners="square"] .button-primary,
+:root[data-lab-corners="square"] .button-quiet,
+:root[data-lab-corners="square"] .tag-chip,
+:root[data-lab-corners="square"] .admin-badge,
+:root[data-lab-corners="square"] .reading-width-current,
+:root[data-lab-corners="square"] .field-input,
+:root[data-lab-corners="square"] .lab-select,
+:root[data-lab-corners="square"] .theme-switch-track,
+:root[data-lab-corners="square"] .theme-switch-knob,
+:root[data-lab-corners="square"] .lab-switch-track,
+:root[data-lab-corners="square"] .lab-switch-knob {
+  border-radius: 0;
+}
+
+/* --- 打字机 ---------------------------------------------------------------
+   全站换等宽。挂在 :root 上而不是 body：html 的字体栈本来就是在这里定义的，
+   同一处改才好对照；子元素全都不写 font-family，会自然继承下去。
+
+   中文没有等宽字形，浏览器会回退到系统中文字体，所以真正变化的是数字、
+   拉丁字母和标点——这一条已经写进 LABS 里的 caveat，不在这里重复解释。 */
+:root[data-lab-typewriter="on"] {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+}
+
+/* 等宽字形的字面更宽，1.9 的行距会显得松垮，收回 1.75；
+   同时把正文缩到 1rem：同样一行字数变少，字号不降会撑破阅读宽度。 */
+:root[data-lab-typewriter="on"] .prose {
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+/* --- 液态玻璃：让有底板的面板让出底面 ---------------------------------------
+   面板底下已经垫了一块玻璃，面板自己那层亚克力底再画一遍就把玻璃盖住了。
+
+   这条必须放层外：卡片上有 `hover:bg-panel-strong` 这类工具类，
+   而工具类在 @layer utilities 里，写进 components 层会被它们压回去，
+   表现是鼠标一悬停面板又变回原来的样子。
+
+   只改颜色、不改 border-width 和 padding：尺寸一动，底板就对不上了
+   （底板是按面板当时的盒子量的）。 */
+:root[data-lab-liquidglass="on"] .panel[data-lab-glass-plate="on"],
+:root[data-lab-liquidglass="on"] .panel-strong[data-lab-glass-plate="on"],
+:root[data-lab-liquidglass="on"] .panel-raised[data-lab-glass-plate="on"] {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }

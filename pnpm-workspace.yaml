@@ -21,3 +21,7 @@ allowBuilds:
   # 因此 Cloudflare 构建不需要它，关掉即可。
   # 若日后在 CI 里改用 esbuild 打包，再改回 true。
   esbuild: false
+
+  # @ybouane/liquidglass：它的 postinstall 只是给作者自己打 patch-package
+  # 补丁，npm 包里已经带了打包好的 dist/index.js，消费方不需要跑。
+  '@ybouane/liquidglass': false

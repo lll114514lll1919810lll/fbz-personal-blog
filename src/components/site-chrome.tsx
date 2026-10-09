@@ -116,6 +116,38 @@ export function SiteFooter() {
               {LICENSE.code}
             </a>
           </span>
+
+          {/* 实验室入口放在授权这一行的最右端。
+              它自己也占一个「组」而不是混进上面两组之一：
+              justify-between 下底栏是「左版权、右元信息」两块，
+              把它单独做成第三个子项会被顶到正中间，孤零零一个链接
+              悬在两块内容之间。留在这行里就是右对齐的第三个短项。
+
+              加一枚烧瓶图标是因为它和旁边两条性质不同：
+              那两条是「内容/源码各自的协议」，这条是一个页面。
+              图标承担「这里不是协议」的区分，同时不抢视线。
+              也不进顶栏——实验室是给愿意折腾的人准备的暗门，
+              顶栏四个入口对应的是站点的四类内容，不该和它并列。 */}
+          <span className="whitespace-nowrap">
+            <Link
+              href="/lab"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9.5 3h5M10.5 3v6.3L5.9 17.5A2 2 0 0 0 7.7 20.5h8.6a2 2 0 0 0 1.8-3L13.5 9.3V3" />
+              </svg>
+              <LinkPending>实验室</LinkPending>
+            </Link>
+          </span>
         </p>
       </div>
     </footer>
