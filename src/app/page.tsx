@@ -74,8 +74,8 @@ export default function HomePage() {
         <div className="flex flex-col gap-4">
           <div className="flex items-end justify-between">
             <div>
-              <p className="eyebrow">FEATURED</p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight">精选文章</h2>
+              <p className="eyebrow">LATEST</p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight">最新文章</h2>
             </div>
             {posts.length > 0 && (
             <Link
@@ -122,10 +122,10 @@ export default function HomePage() {
       <section className="flex flex-col gap-4">
         <div className="flex items-end justify-between">
           <div>
-            <p className="eyebrow">LATEST WRITINGS</p>
+            <p className="eyebrow">RECENT UPDATES</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight">最近更新</h2>
           </div>
-          <span className="text-sm text-muted">{posts.length} 篇</span>
+          <span className="text-sm text-muted">{posts.length - 1} 篇</span>
         </div>
         {/* 手机 1 列 / 平板 2 列 / 电脑 3 列，与文章列表页保持一致 */}
         {latest.length > 0 ? (
