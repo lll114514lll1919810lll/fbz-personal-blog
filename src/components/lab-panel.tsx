@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { LabGlassPlayground } from "@/components/lab-glass-playground";
 import { LABS, LAB_GROUPS, LAB_SOLO, type Lab, type LabGroupId } from "@/lib/labs";
 import {
   useLabRuntimeStatus,
@@ -68,6 +69,11 @@ export function LabPanel() {
                     value={valueOf(lab.id)}
                     onSet={(value) => set(lab.id, value)}
                     onToggle={() => toggle(lab.id)}
+                    /* 液态玻璃开了之后有一堆参数要调，面板就摆在开关下面：
+                       放到页面底部的话，调完一次滑上去看效果就得来回滚 */
+                    extra={
+                      lab.id === "liquidglass" ? <LabGlassPlayground /> : undefined
+                    }
                   />
                 ))}
               </ul>
@@ -155,11 +161,19 @@ function LabRow({
   value,
   onSet,
   onToggle,
+  extra,
 }: {
   lab: Lab;
   value: string;
   onSet: (value: string) => void;
   onToggle: () => void;
+  /**
+   * 跟在说明文字后面的附加内容，只在实验开着时渲染。
+   *
+   * 用在「开了之后还有一堆参数要调」的实验上（目前只有液态玻璃）：
+   * 调参面板跟开关放在同一行里，读者不会在页面底部漏掉它。
+   */
+  extra?: React.ReactNode;
 }) {
   // 说明文字和控件共用一组 id：点标题能聚焦控件，读屏也能把说明念出来
   const labelId = `lab-${lab.id}-label`;
@@ -175,30 +189,31 @@ function LabRow({
 
   return (
     /* 行分隔线不写在工具类里：--border 太淡，见 globals.css 的 .lab-row */
-    <li className="lab-row flex items-start justify-between gap-4">
-      <div className="flex flex-col gap-1">
-        <p id={labelId} className="text-sm font-medium">
-          {lab.label}
-        </p>
-        {/* 用 aria-describedby 把说明挂到控件上：
-            读屏聚焦时能听到它到底改了什么，不用回头找文字 */}
-        <p id={descId} className="text-sm leading-relaxed text-secondary">
-          {lab.description}
-        </p>
-        {lab.warning && (
-          /* 金色加粗：站里唯一的暖色，和运行时失败提示同一枚令牌 */
-          <p className="text-xs font-semibold leading-relaxed text-[var(--gold)]">
-            {lab.warning}
+    <li className="lab-row flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <p id={labelId} className="text-sm font-medium">
+            {lab.label}
           </p>
-        )}
-        {lab.caveat && (
-          <p className="text-xs leading-relaxed text-muted">注意：{lab.caveat}</p>
-        )}
-        {runtimeNote && (
-          <p className={`text-xs leading-relaxed ${runtimeNote.className}`}>
-            {runtimeNote.text}
+          {/* 用 aria-describedby 把说明挂到控件上：
+              读屏聚焦时能听到它到底改了什么，不用回头找文字 */}
+          <p id={descId} className="text-sm leading-relaxed text-secondary">
+            {lab.description}
           </p>
-        )}
+          {lab.warning && (
+            /* 金色加粗：站里唯一的暖色，和运行时失败提示同一枚令牌 */
+            <p className="text-xs font-semibold leading-relaxed text-[var(--gold)]">
+              {lab.warning}
+            </p>
+          )}
+          {lab.caveat && (
+            <p className="text-xs leading-relaxed text-muted">注意：{lab.caveat}</p>
+          )}
+          {runtimeNote && (
+            <p className={`text-xs leading-relaxed ${runtimeNote.className}`}>
+              {runtimeNote.text}
+            </p>
+          )}
       </div>
 
       {lab.kind === "switch" ? (
@@ -247,6 +262,9 @@ function LabRow({
           </svg>
         </span>
       )}
+      </div>
+
+      {value === "on" && extra ? extra : null}
     </li>
   );
 }

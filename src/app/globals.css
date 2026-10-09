@@ -1108,6 +1108,14 @@
     padding: 1rem 1.1rem;
   }
 
+  /* 实验行里的附加面板（目前只有液态玻璃的调参）。
+     和互斥组那层框同一套画法，但更轻：它嵌在行里，不是独立的一块。 */
+  .lab-subpanel {
+    border: 1px solid var(--lab-divider);
+    border-radius: var(--radius-panel);
+    background-color: var(--panel-bg-raised);
+  }
+
   .lab-group-title {
     color: var(--secondary);
     font-size: 0.75rem;
@@ -1120,61 +1128,97 @@
     padding-top: 1rem;
   }
 
-  /* --- 液态玻璃底板（运行时实验，见 components/lab-liquidglass.tsx） ------
-     库要求玻璃元素是 root 的直接子元素，而本站的面板嵌在 main 和卡片网格里，
-     所以面板本身交不出去：这里改成给每块面板垫一块同位置同尺寸的「玻璃底板」，
-     面板自己由下面的规则转成透明底，玻璃就透出来了。
+  /* --- 液态玻璃画布（运行时实验，见 components/lab-liquidglass.tsx） ------
+     渲染器把「背景图 + 每块面板位置上的玻璃」画进这块画布，画布铺在正文
+     下面；正文仍是活的 DOM，压在玻璃上。
 
-     root 铺在正文下面（z-index:-1），位置用文档坐标——底板和面板在同一个
-     坐标系里一起滚，滚动时不需要任何重算。 */
-  .lab-lg-layer {
-    position: absolute;
+     用 position: fixed 而不是 absolute：渲染器内部把元素当视口坐标处理
+     （滚动量由它自己的 scrollY 负责），画布跟着视口走、页面滚动时不用重排
+     画布本身。
+
+     z-index 必须是 -1：fixed + z-index:0 属于「定位元素」，会画在**所有**
+     普通文档流内容之上，正文会被整块画布盖住。负值则落在「页面背景之上、
+     正文之下」那一层，正好是我们要的位置。画布是 body 的直接子节点，
+     中间没有 transform/opacity 之类的祖先把它困在自己的层叠上下文里。
+
+     pointer-events: none 是必须的：画布盖住整个视口，
+     不关掉的话正文的点击、选中、链接全点不到。 */
+  /* 调参面板的滑杆与复选框（见 components/lab-glass-playground.tsx）。
+     样式跟着站点的令牌走，不引第三方控件库。 */
+  .lab-range {
+    width: 100%;
+    height: 1.25rem;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .lab-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  }
+
+  .lab-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 999px;
+    background: var(--switch-knob);
+    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  }
+
+  .lab-range::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  }
+
+  .lab-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--switch-knob);
+    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  }
+
+  .lab-range:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+  }
+
+  .lab-check {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--switch-knob);
+    cursor: pointer;
+  }
+
+  .lab-lg-canvas {
+    position: fixed;
     inset: 0;
     z-index: -1;
-    /* 整层只是背景，不能吃掉正文的点击 */
     pointer-events: none;
   }
 
-  /* 背景图固定在视口上，复刻 body 的 background-attachment: fixed。
-     库走 <img> 的 drawImage 快速通道，不认 CSS 的 background-* 属性，
-     所以 cover / 居中这些得写在 object-fit 上。 */
-  .lab-lg-bg {
-    position: fixed;
-    inset: 0;
+  .lab-lg-canvas canvas {
+    display: block;
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    object-position: center;
   }
 
-  /* 一块底板 = 一块面板。
-     位置和尺寸由 JS 按面板算好写进内联样式，这里只管观感。
-     淡入放在底板上而不是整层上：层上加 opacity 会让它成为 fixed 定位的
-     包含块，吸顶顶栏那块固定在视口上的底板就会跟着跑偏。 */
-  .lab-lg-plate {
-    /*
-      这一行是整块实验能不能看见的关键，别删。
-
-      库往玻璃元素里注入的 canvas 带 `z-index: -1`。而负 z-index 的后代
-      会「逃」到最近的那个层叠上下文里，按规矩画在该上下文的最底层——
-      也就是排在同层的背景 <img> 下面，于是玻璃被背景图整个盖住。
-
-      只有 position: fixed 的元素才会自动成为层叠上下文。顶栏底板是 fixed
-      （它对应的顶栏是 sticky），所以一直正常；其余底板是 absolute +
-      z-index: auto，全都白画了（实测：开关「液态玻璃」后页面几乎不变，
-      而且改任何参数屏幕都不动，因为那层输出根本没露出来）。
-
-      isolation: isolate 就地建一个层叠上下文，代价最小，
-      不像 z-index 会顺带改变自己的层叠次序。
-    */
-    isolation: isolate;
-    opacity: 0;
-    transition: opacity 400ms ease;
+  /* 便宜版玻璃的滤镜定义（超长面板用，见 components/lab-liquidglass.tsx）。
+     要用 SVG 滤镜就得有一个容器，它不能占空间、也不能吃指针事件。
+     display:none 不行：滤镜是按 id 引用的，隐藏整棵子树会让引用失效。 */
+  .lab-lg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
   }
 
-  .lab-lg-layer[data-ready="on"] .lab-lg-plate {
-    opacity: 1;
-  }
   /**
    * 降级一：浏览器不支持 backdrop-filter（老 Firefox 等）。
    * 直接用不透明底色，牺牲通透感换可读性。
@@ -2327,11 +2371,69 @@ html {
 
    只改颜色、不改 border-width 和 padding：尺寸一动，底板就对不上了
    （底板是按面板当时的盒子量的）。 */
-:root[data-lab-liquidglass="on"] .panel[data-lab-glass-plate="on"],
-:root[data-lab-liquidglass="on"] .panel-strong[data-lab-glass-plate="on"],
-:root[data-lab-liquidglass="on"] .panel-raised[data-lab-glass-plate="on"] {
-  background-color: transparent;
-  border-color: transparent;
-  box-shadow: none;
+:root[data-lab-liquidglass="on"] .panel[data-lab-glass-panel="on"],
+:root[data-lab-liquidglass="on"] .panel-strong[data-lab-glass-panel="on"],
+:root[data-lab-liquidglass="on"] .panel-raised[data-lab-glass-panel="on"] {
+  /*
+    玻璃由画布负责，面板只留一层很薄的底。
+
+    必须足够淡：真正呈现折射的是画布上那块玻璃，面板的 background-color 是
+    画在画布**上面**的，底色一厚就把折射盖住了。深浅两个主题各取一个比例。
+
+    面板自己的 backdrop-filter 这里不用管：它在层内，会被内联样式
+    （`backdrop-filter: url(...)`）之外的情况覆盖——本实验走画布，
+    面板不该再叠一层自己的毛玻璃。
+  */
+  background-color: color-mix(
+    in srgb,
+    var(--background) calc(var(--lab-glass-tint, 0.18) * 100%),
+    transparent
+  );
   backdrop-filter: none;
+
+  /*
+    顶边和底边手工描一道淡高光。
+
+    画布上的玻璃只在**侧边**做折射，上下两条边本身什么都没有；面板自己的
+    底又薄到几乎看不见，于是上下边看着像张方纸片。原型里玻璃的上下边是有
+    一道细亮线的——这里手工补上：底部比顶部再淡一半，够暗示「这是一块有
+    厚度的片」就行，别真拉出一条发光边框。
+
+    整条 box-shadow 要重写一遍：`.panel` 那条只带顶部高光，这里补底部。
+  */
+  box-shadow:
+    inset 0 1px 0 var(--panel-highlight),
+    inset 0 -1px 0 color-mix(in srgb, var(--panel-highlight) 50%, transparent),
+    var(--panel-shadow);
+  /*
+    自己那圈边框也要藏掉。
+
+    玻璃的边缘（高光 + 外阴影）由画布/滤镜负责，DOM 这圈 1px 边框会紧贴着
+    再描一遍，看起来就是「边框没隐藏」——圆形的回到顶部按钮上最明显，
+    玻璃边和边框叠成两个同心圆。
+    border-color 不留宽度：面板是边框盒，改宽度会动布局。
+  */
+  border-color: transparent;
+}
+
+:root[data-lab-liquidglass="on"][data-theme="dark"] .panel[data-lab-glass-panel="on"],
+:root[data-lab-liquidglass="on"][data-theme="dark"] .panel-strong[data-lab-glass-panel="on"],
+:root[data-lab-liquidglass="on"][data-theme="dark"] .panel-raised[data-lab-glass-panel="on"] {
+  background-color: color-mix(
+    in srgb,
+    var(--background) calc(var(--lab-glass-tint-dark, 0.3) * 100%),
+    transparent
+  );
+}
+
+/*
+  画布铺好壁纸之后（data-lab-glass-canvas 是渲染器成功后自己写上去的），
+  把 body 的 CSS 背景图收起来——否则同一张图会叠两层：画布一层、CSS 一层，
+  玻璃采样到的和旁边看到的不是同一张。
+
+  用成功后写的属性而不是实验开关本身：拿不到 WebGL 时画布上没有壁纸，
+  这时候把 CSS 背景图藏掉就等于整页白底。
+*/
+:root[data-lab-glass-canvas="on"] body {
+  background-image: none;
 }

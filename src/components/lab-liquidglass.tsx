@@ -1,139 +1,139 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
-import type { GlassConfig, LiquidGlass } from "@ybouane/liquidglass";
+import { useEffect, useRef, useState } from "react";
+import {
+  LiquidGlassRenderer,
+  type GlassElementConfig,
+} from "@/components/liquid-glass/renderer";
 import { setLabRuntimeStatus } from "@/lib/lab-runtime-status";
+import { cheapGlassMap } from "@/lib/liquid-glass-cheap";
+import {
+  currentGlassTheme,
+  getGlassParams,
+  subscribeGlassParams,
+  type GlassParams,
+} from "@/lib/liquid-glass-params";
 
 /**
- * 液态玻璃面板材质（实验室实验，用 MIT 的 @ybouane/liquidglass）。
+ * 液态玻璃面板材质（实验室实验）。
  *
- * 这个库的模型和站点其余部分正好相反，接线前必须先说清楚它要什么：
+ * 用 [liquid-glass-webgl](https://github.com/martin65536/liquid-glass-webgl)
+ * 的 WebGL 渲染器（AGPL-3.0，见根目录 LICENSE 与 README）。
  *
- *   它不生成「效果层」，而是把 root 的**直接子节点**光栅化成一张离屏画布，
- *   再按玻璃元素的形状跑 WebGL 片元着色器（折射、色散、Fresnel、倒角高光），
- *   把结果画进玻璃元素内部注入的 <canvas> 里。
+ * ## 接线方式：只当「一层玻璃画布」，不接管页面
  *
- *   两条硬约束：玻璃元素必须是 root 的直接子元素；root 自己的 CSS 背景
- *   不参与采样，背景必须以子元素的形式存在。
+ * 那个库自带的宿主 `LiquidGlassCanvas` 要求把**整个界面**描述成
+ * `GlassElementConfig[]`——文字、按钮、滚动都在它的 canvas 里画。本站是
+ * MDX + 真实 DOM 的站点，照那条路走就得把整站重写一遍，还会丢掉 SEO、
+ * 可访问性、复制粘贴和浏览器查找。所以这里不用它的宿主，只拿渲染器本身：
  *
- * 而本站的面板是嵌套在 main/卡片网格里的，当不了 root 的直接子元素。
- * 所以这里不把面板本身交给库，而是给它**垫一块玻璃底板**：
+ *   canvas（position: fixed，铺在内容下面）
+ *     └ 画「背景图 + 每块面板位置上的玻璃」
+ *   DOM 层（正常文档流）
+ *     └ 面板半透明，文字、图片、链接仍是活的 DOM，压在玻璃上
  *
- *   .lab-lg-layer                     root：文档坐标、z-index:-1、不吃指针事件
- *     ├ img.lab-lg-bg                 场景：固定在视口上的背景图（复刻 background-attachment: fixed）
- *     ├ div.lab-lg-plate              ② 每块面板一枚，位置和尺寸对齐那块面板
- *     └ ...
+ * 渲染器会把壁纸画进画布，所以开关打开时 body 的 CSS 背景图要收起来
+ * （否则同一张图叠两层），见 globals.css 的实验室段。
  *
- *   ① <img> 走库的 drawImage 快速通道，不进 html-to-image 那套 SVG 光栅化。
- *   ② 底板画的是「这块面板位置上、背景被玻璃折射后」的样子。
- *      面板自己随后被 CSS 转成透明底（见 globals.css 的
- *      [data-lab-glass-plate="on"]），玻璃就透出来了，而面板里的文字
- *      仍然是活的 DOM，压在底板上，不受光栅化影响。
+ * ## 顶栏和底栏不参与
  *
- * 为什么是「一层底板」而不是「一块面板一个实例」：每个实例会开一个独立的
- * WebGL 上下文，浏览器上限只有十几个，而标签页那种页面几十块面板。
- * 一个实例 + N 个玻璃元素既能拿到同样的效果，也只需要一个上下文。
+ * 它们保留原本的毛玻璃。原因写在 panelToElement 的注释里：一个图层没法同时
+ * 做到「在正文之下」和「盖住正文」，而这两条窄边本来就有 blur(14px)。
  *
- * 性能上这个架子有三处是必须的，都是实测出来的，改之前先看注释：
- *   1. 每块底板要自成层叠上下文（见 globals.css 的 .lab-lg-plate，
- *      否则 canvas 会被背景图盖住，效果根本不显示）；
- *   2. 滚动时必须主动让库重画，而且要节流 + 剔除屏幕外的；
- *   3. 面积太大、数量太多的面板不给玻璃。
+ * ## 坐标与滚动
+ *
+ * 元素用**文档坐标** + `scroll: true`——渲染器内部按 `y = rect.y - scrollY`
+ * 换算成视口坐标。页面滚动仍由浏览器负责，我们只把 `window.scrollY` 同步过去。
+ *
+ * ## 兜底
+ *
+ * 拿不到 WebGL 上下文、或壁纸加载失败时什么都不做：面板保持原本的亚克力
+ * 外观，也不会留下一块空白画布（CSS 背景图只在渲染成功后才收起来）。
  */
-
-/** 面板上的标记：有了它 CSS 才把面板底转透明 */
-const PLATE_ATTR = "data-lab-glass-plate";
 
 /**
- * 每帧的像素预算（设备像素）。
+ * 便宜版玻璃：一条 backdrop-filter 引用一个 SVG 滤镜就够了。
  *
- * 这是整套开销的唯一硬约束：库的模糊缓冲是全分辨率的，一块玻璃每帧要跑
- * 6 次迭代 × 横竖两向 = 12 遍全尺寸写入，所以「玻璃总面积 × DPR²」基本就
- * 等于每帧要写多少纹素。3.2M 是桌面集成显卡上还撑得住的数量级。
+ * 只有超长面板走这条路（WebGL 那套在它上面会退化），
+ * 见 lib/liquid-glass-cheap.ts。过滤链里的模糊/对比度/亮度/饱和度直接用
+ * 调参面板那几个值，好让两套玻璃的观感尽量一致。
  */
-const PIXEL_BUDGET = 3_200_000;
-
-/**
- * 按当前屏幕算这一轮实验的预算。
- *
- * 之所以要算而不是写死两个常数，是因为有两个反直觉的地方：
- *
- *   1. 手机的 CSS 视口小，但 DPR 通常是 2~3——同一块面板的设备像素是桌面的
- *      4~9 倍。所以「小屏就跑得动」是错的，小屏反而更该压数量；
- *   2. 竖屏手机一屏本来也塞不下几块面板，16 块的上限在那边等于没有限制。
- *
- * 于是：面积上限从「设备像素预算 ÷ DPR²」倒推（DPR 3 时只剩 355k CSS px，
- * 一块 390×844 的整屏面板就已经超了，不会给它上玻璃）；
- * 数量上限跟着视口面积走，小屏自动降到 4~6 块。
- */
-function glassPlan() {
-  const dpr = window.devicePixelRatio || 1;
-  const viewportArea = window.innerWidth * window.innerHeight;
-
-  return {
-    // 一屏能放二十块面板的大屏才给到 16，手机上一屏大概只有 4 块
-    maxPlates: Math.max(4, Math.min(16, Math.round(viewportArea / 120_000))),
-    // 单块面积上限：比这个大的面板（长文正文那种）不给玻璃
-    maxPlateArea: PIXEL_BUDGET / (dpr * dpr),
-  };
-}
-
-/** 视口外这个距离以内的底板仍然算「看得见」，提前一点重画免得边缘露馅 */
-const CULL_MARGIN = 240;
-
-/**
- * 滚动时的重画间隔（毫秒）。
- *
- * 页面滚动是 60fps，玻璃按 60fps 全量重算就是「卡顿太明显」的根源；
- * 压到约 30fps 之后玻璃的滞后最多一帧多一点，肉眼看不出来，开销直接减半。
- * 停手之后会再补一次，保证最终画面是准的。
- */
-const REDRAW_INTERVAL = 32;
-
-/**
- * 两套玻璃参数，直接对应演示页（liquid-glass.ybouane.com）上的预设：
- *
- *   浅色 = Regular Glass        演示：{ cornerRadius: 40, blurAmount: 0 }
- *   深色 = Dark Glass           演示：{ brightness: -0.3, cornerRadius: 40, blurAmount: 0.4 }
- *
- * 除了 blurAmount / brightness，其余一律用库的默认值——「Regular glass」
- * 本来就是默认值加一个圆角，自己另调一套 refraction / specular 只会跑偏。
- *
- * floating 必须是 false：演示页那几块是给人拖玩的浮板，站点面板要跟着文档走。
- * shadowOpacity 也用默认的 0.3：面板浮在背景图上，需要那圈投影站稳。
- */
-const GLASS_BY_THEME: Record<"light" | "dark", Partial<GlassConfig>> = {
-  light: {
-    // Regular Glass 一点不糊。这里「略加模糊」到 0.4：
-    // 面板是要托住正文的，完全不糊时文字直接骑在背景的明暗交界上。
-    blurAmount: 0.4,
-    brightness: 0,
-    floating: false,
-  },
-  dark: {
-    // Dark Glass 的 brightness: -0.3 是这套预设的主角：
-    // 深色主题的背景图偏亮、有霓虹块，面板压暗之后正文才读得清。
-    // 模糊同样按需求从 0.4 加到 0.6。
-    blurAmount: 0.6,
-    brightness: -0.3,
-    floating: false,
-  },
+type CheapFilter = {
+  id: string;
+  url: string;
+  scale: number;
+  /**
+   * 元素尺寸（CSS px）。
+   *
+   * 滤镜和 feImage 都用它——filterUnits 是 userSpaceOnUse，尺寸写错位移图
+   * 就会被拉伸、整个效果跑偏。
+   */
+  width: number;
+  height: number;
+  blur: number;
+  contrast: number;
+  brightness: number;
+  saturation: number;
 };
 
-/** 取当前主题该用的那套参数。data-theme 缺失时按浅色兜底（和主题脚本一致） */
-function presetForTheme(): Partial<GlassConfig> {
-  return document.documentElement.dataset.theme === "dark"
-    ? GLASS_BY_THEME.dark
-    : GLASS_BY_THEME.light;
-}
+/** 面板上的标记：CSS 靠它把面板底转透明 */
+const PANEL_ATTR = "data-lab-glass-panel";
+
+/** 根元素上的标记：CSS 靠它把 body 的 CSS 背景图收起来（渲染器已经画了一份） */
+const CANVAS_ATTR = "data-lab-glass-canvas";
+
+/** 一页最多处理多少块面板 */
+const MAX_PANELS = 24;
 
 /**
- * 读当前主题的背景图地址。
+ * 两个方向都小于这个尺寸的面板不上玻璃（只看短边是不够的）。
  *
- * 不写死文件名：主题令牌是唯一来源（浅色 + 两份深色块各一套），
- * 背景图以后换名字或换图，这里跟着走。
+ * 不只是「看不清」的问题。玻璃模式会把面板那层薄纱压到两成透明（大面板上
+ * 是对的——折射由画布负责），但小控件的背后往往就是一块深色背景，
+ * **没有东西可折射**，画布画出来只剩一圈边缘高光。实测 44px 的回到顶部
+ * 按钮：开玻璃后从「实心圆钮」变成了「空心圆环」。
+ *
+ * 判据是「两个方向都小」而不是「短边小」：标签页那种 473×60 的横条短边
+ * 也很小，但它的长边上有实实在在的边缘可以折射，该给玻璃。
  */
+const MIN_SIDE = 64;
+
+/**
+ * 圆角在遮罩纹理里至少要有这么多像素，否则跳过这块面板。
+ *
+ * 渲染器给每块玻璃生成一张**方形**遮罩纹理（把整个元素归一化到一张
+ * texSize × texSize 的图里，texSize 上限 1024，再乘 capsuleSdfQuality），
+ * 圆角在这张图里能占到的像素数 = radius × (texSize / 元素最长边)。
+ *
+ * 实测：832×31896 的长文面板，14px 圆角只占 0.2 个像素，圆角被量化成直角，
+ * 画出来就是一个方角玻璃盖住了面板的圆角；而 832×6381 的面板占约 1.1 个像素，
+ * 看着是正常的。所以门槛取 0.5：低于它的直接不上玻璃，维持面板原本的圆角。
+ */
+const MIN_RADIUS_TEXELS = 0.5;
+
+/** 复刻渲染器選 texSize 的规则（continuous-mask.ts），只取判断需要的部分 */
+function radiusTexels(width: number, height: number, radius: number, dpr: number): number {
+  const maxDim = Math.max(width, height) * dpr;
+  let base = 128;
+  while (base < maxDim * 2 && base < 1024) base <<= 1;
+  // renderer.capsuleSdfQuality 默认 0.5
+  const texSize = Math.max(32, Math.ceil(base * 0.5));
+  return (radius * dpr * texSize) / maxDim;
+}
+
+/** 密度基准：参考实现用 dp 描述尺寸，本站的 CSS 像素相当于它的 dp 1.0 */
+const DP = 1;
+
+/** 倒角高光的固定部分（其余几项可调，见 lib/liquid-glass-params.ts） */
+const HIGHLIGHT_MODE = 0;
+const HIGHLIGHT_COLOR: [number, number, number] = [1, 1, 1];
+const HIGHLIGHT_FALLOFF = 1.0;
+
+/** 外阴影的固定部分 */
+const SHADOW_OFFSET_X = 0;
+const SHADOW_COLOR: [number, number, number] = [0, 0, 0];
+
+/** 从 CSS 变量里取当前主题的背景图地址（渲染器要自己把壁纸画进画布） */
 function currentBackgroundUrl(): string {
   const raw = getComputedStyle(document.documentElement)
     .getPropertyValue("--bg-image")
@@ -144,348 +144,734 @@ function currentBackgroundUrl(): string {
 }
 
 /**
- * 单块底板的配置：主题预设 + 这块面板自己的圆角和倒角。
+ * 取当前主题的背景薄纱颜色（`--bg-scrim`），取不到就返回 null。
  *
- * 圆角不能照抄演示页的 40：演示页那几块是固定尺寸的浮板，而本站面板的圆角
- * 跟着 --radius-panel 走（「圆角」那个实验还能把它改成 0 或 26）。
- * 底板必须和面板的圆角一致，否则玻璃的四角会露出或盖住面板的边。
+ * 站点在浅色主题下会往背景图上压一层 50% 白，让正文读得清；深色主题是 none。
+ * 渲染器只会把原图当壁纸画，不会替我们压这一层，所以这里把颜色提出来烤进
+ * 壁纸——否则一开玻璃，浅色主题的底会明显变花。
+ *
+ * 值形如 `linear-gradient(rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.5))`，
+ * 两端颜色相同，所以按纯色填一次就等价。
  */
-function plateConfig(radius: number, width: number, height: number) {
-  /*
-    倒角深度（zRadius）必须跟着面板的厚度走，不能照抄演示页的 40。
-
-    倒角是「玻璃有多厚」：它从每条边向内铺开 zRadius 像素。演示页那几块浮板
-    高约 80、宽约 300，40 的倒角刚好是一块厚玻璃；而本站顶栏只有 57 高，
-    上下两条 40 的倒角会在中间撞上——法线在那里翻向，画面上就是一条
-    「被劈了一刀」的接缝。
-
-    取 min(宽,高)/4 封顶 40：57 高的顶栏得到 14（两条倒角互不重叠），
-    大面板仍然拿到 40 的厚玻璃感。
-  */
-  const zRadius = Math.max(6, Math.min(40, Math.round(Math.min(width, height) / 4)));
-  return { ...presetForTheme(), cornerRadius: radius, zRadius };
+function currentScrimColor(): string | null {
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue("--bg-scrim")
+    .trim();
+  if (!raw || raw === "none") return null;
+  const match = /rgba?\([^)]+\)|#[0-9a-f]{3,8}/i.exec(raw);
+  return match ? match[0] : null;
 }
 
-export function LiquidGlassBackground() {
-  const layerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
-  // 换页时面板整套换掉，底板必须重新量。用 pathname 依赖最直接：
-  // 路由一变就整段重建，不用去猜哪些 DOM 变了
-  const pathname = usePathname();
+/**
+ * 载入壁纸并把薄纱压在上面，返回一张可直接交给渲染器的图。
+ *
+ * 走 data URL 而不是图片地址：渲染器内部用 Image + texImage2D，data URL 一样
+ * 能解码，也就不必为「带薄纱的版本」多准备一份静态资源。
+ */
+async function loadScrimmedWallpaper(url: string): Promise<string> {
+  const scrim = currentScrimColor();
+  if (!scrim) return url;
 
+  const image = new Image();
+  image.src = url;
+  await image.decode();
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d");
+  if (!context) return url;
+  context.drawImage(image, 0, 0);
+  context.fillStyle = scrim;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
+}
+
+/**
+ * 把一块面板翻译成渲染器的玻璃元素；不该上玻璃的返回 null。
+ *
+ * 圆角取面板自己的计算值：本站在「圆角」实验里能把 --radius-panel 改成
+ * 0 或 26，玻璃必须跟着走，否则四角会露出来或盖住面板的边。
+ */
+/**
+ * 面板是否跟随文档流。buildElements 里量过就缓存下来，
+ * 每帧的几何预检直接查缓存，不再重复读计算样式。
+ */
+const scrollFlags = new WeakMap<HTMLElement, boolean>();
+
+/** 这块面板是否参与滚动偏移（吸顶/固定的不参与，见 panelToElement 的说明） */
+function elementScrolls(panel: HTMLElement): boolean {
+  const position = getComputedStyle(panel).position;
+  return position !== "sticky" && position !== "fixed";
+}
+
+function panelToElement(
+  panel: HTMLElement,
+  index: number,
+  params: GlassParams,
+): GlassElementConfig | null {
+  const rect = panel.getBoundingClientRect();
+  // 两个方向都小才算「小控件」：见 MIN_SIDE 的说明
+  if (rect.width < MIN_SIDE && rect.height < MIN_SIDE) return null;
+
+  const style = getComputedStyle(panel);
+  const radius = Math.min(
+    parseFloat(style.borderTopLeftRadius) || 0,
+    Math.min(rect.width, rect.height) / 2,
+  );
+
+  /*
+    顶栏和底栏不给玻璃，保留它们原本的毛玻璃。两层原因，任何一层单独都足够：
+
+    1. 层级。全局画布铺在正文**下面**（z-index: -1），正文才能压在玻璃上；
+       而吸顶顶栏要盖住滚上来的内容，它必须画在正文**之上**。一个图层同时
+       满足这两件事是不可能的——试过给顶栏单独挂一块满视口画布 + 第二个
+       渲染器，能跑，但要多开一个 WebGL 上下文，而且画布原点必须与视口
+       左上角严格对齐才不跑偏，太脆。
+    2. 值不值。顶栏只有 57px 高、底栏 76px，本来就带 blur(14px) 的毛玻璃，
+       观感和液态玻璃差得不多；为这两条窄边再养一层渲染器不划算。
+
+    判据是「在不在 <main> 里」，不是标签名。
+
+    按标签名排除 HEADER/FOOTER 会误伤：页面上的 `page-hero` 也是 <header>
+    （见 /blog、/lab 的页头），它们本该和别的面板一样有玻璃，结果一直没有。
+    而顶栏底栏都渲染在 <main> 外面——`app/layout.tsx` 里它们在
+    `PageTransition` 之外，`<main>` 由 `page-transition.tsx` 渲染——
+    所以这个边界正好只把站点外框划出去。
+
+    顺带一提，也不按定位方式一刀切：文章页的目录是 `nav.panel.sticky`，
+    它待在自己的栏里、没有内容从它下面滚过去，用全局画布完全没问题。
+  */
+  if (!panel.closest("main")) return null;
+
+  /*
+    吸顶/固定的元素（目录那块）用**视口坐标**并且不参与滚动偏移。
+
+    渲染器对 scroll: true 的元素算 `y = rect.y - scrollY`，那是给跟随文档流的
+    元素准备的。目录钉在视口上、自己不动，再减一次 scrollY 就会一边滚动一边
+    往上跑。这类元素的位置变化由 buildElements 重新量（见那里的 ResizeObserver）
+    ——它只在「开始吸」的那几帧里变。
+  */
+  const anchored = !elementScrolls(panel);
+  scrollFlags.set(panel, !anchored);
+
+  // 圆角在遮罩纹理里已经退化成直角的面板（超长正文）不上玻璃
+  const dpr = window.devicePixelRatio || 1;
+  if (radius > 0 && radiusTexels(rect.width, rect.height, radius, dpr) < MIN_RADIUS_TEXELS) {
+    return null;
+  }
+
+  return {
+    id: `lab-glass-${index}`,
+    kind: "glass-shape",
+    rect: {
+      x: rect.left,
+      // 跟随文档流的用文档坐标（renderer 内部减 scrollY）；
+      // 吸顶的用视口坐标，原样交给 renderer
+      y: anchored ? rect.top : rect.top + window.scrollY,
+      w: rect.width,
+      h: rect.height,
+    },
+    cornerRadius: radius,
+    refractionHeight: params.refractionHeight * DP,
+    refractionAmount: params.refractionAmount * DP,
+    depthEffect: params.depthEffect,
+    chromaticAberration: params.chromaticAberration,
+    blurRadius: params.blurRadius * DP,
+    saturation: params.saturation,
+    brightness: params.brightness,
+    contrast: params.contrast,
+    tintColor: [0, 0, 0, 0],
+    surfaceColor: [0, 0, 0, 0],
+    highlight: {
+      mode: HIGHLIGHT_MODE,
+      color: HIGHLIGHT_COLOR,
+      angle: (params.highlightAngle * Math.PI) / 180,
+      falloff: HIGHLIGHT_FALLOFF,
+      alpha: params.highlightAlpha,
+      widthDp: params.highlightWidth,
+    },
+    outerShadow: {
+      radius: params.shadowRadius * DP,
+      alpha: params.shadowAlpha,
+      offsetX: SHADOW_OFFSET_X,
+      offsetY: (params.shadowRadius / 6) * DP,
+      color: SHADOW_COLOR,
+    },
+    innerShadow: null,
+    label: "",
+    labelColor: [0, 0, 0, 1],
+    showChevron: false,
+    isInteractive: false,
+    scroll: !anchored,
+    // 面板背后就是壁纸，直接采样干净的壁纸即可：省掉场景 FBO，
+    // 静态页面上还能整帧命中缓存（对应参考实现的 LayerBackdrop）
+    independentBackdrop: true,
+  };
+}
+
+/**
+ * 这块面板要不要走便宜版。
+ *
+ * 只有一种情况需要：尺寸正常、可圆角，但圆角在 WebGL 那套的遮罩纹理里会
+ * 退化成直角——也就是超长正文面板（条件见 radiusTexels 的说明）。
+ * 顶栏底栏、吸顶/固定、太小的面板都不在列。
+ */
+function cheapFallbackFor(
+  panel: HTMLElement,
+  index: number,
+  params: GlassParams,
+): CheapFilter | null {
+  const rect = panel.getBoundingClientRect();
+  // 两个方向都小才算「小控件」：见 MIN_SIDE 的说明
+  if (rect.width < MIN_SIDE && rect.height < MIN_SIDE) return null;
+
+  // 站点外框不给便宜版，理由同 panelToElement
+  if (!panel.closest("main")) return null;
+
+  const style = getComputedStyle(panel);
+  const position = style.position;
+  if (position === "sticky" || position === "fixed") return null;
+
+  const radius = Math.min(
+    parseFloat(style.borderTopLeftRadius) || 0,
+    Math.min(rect.width, rect.height) / 2,
+  );
+  if (radius <= 0) return null;
+  // 只有「可圆角但在遮罩里退化」的才走这条；正常的交给 WebGL
+  const dpr = window.devicePixelRatio || 1;
+  if (radiusTexels(rect.width, rect.height, radius, dpr) >= MIN_RADIUS_TEXELS) {
+    return null;
+  }
+
+  const map = cheapGlassMap(rect.width, rect.height, radius);
+  if (!map.url) return null;
+
+  return {
+    id: `lab-glass-cheap-${index}`,
+    url: map.url,
+    scale: map.scale,
+    width: rect.width,
+    height: rect.height,
+    blur: params.blurRadius,
+    contrast: params.contrast,
+    brightness: 1 + params.brightness,
+    saturation: params.saturation,
+  };
+}
+
+export function LiquidGlassPanels() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [cheapFilters, setCheapFilters] = useState<CheapFilter[]>([]);
+
+  /*
+    这个 effect 只在实验被打开/关闭时跑一次，**不跟着路由重建**。
+
+    换页时整段销毁重建的代价不只是慢：渲染器一 dispose，画布就没内容了，
+    而 body 的 CSS 背景图又是在渲染成功后才收起来的——中间那几帧会出现
+    「背景图回来了、玻璃还没画好」的闪烁；壁纸纹理也要重新解码一遍。
+
+    换页只是面板换了一批，逐帧的几何预检会把新面板量出来并重建元素
+    （token 里带着面板集合，数量变了就会触发），所以什么都不用重来。
+  */
   useEffect(() => {
-    const layer = layerRef.current;
-    const image = imageRef.current;
-    if (!layer || !image) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    const html = document.documentElement;
+    let renderer: LiquidGlassRenderer;
+    try {
+      renderer = new LiquidGlassRenderer(canvas);
+    } catch {
+      // 没有 WebGL：安静地退回亚克力外观
+      setLabRuntimeStatus("liquidglass", "failed");
+      return;
+    }
+
     let disposed = false;
-    let instance: LiquidGlass | null = null;
-    let plates: HTMLDivElement[] = [];
     let panels: HTMLElement[] = [];
+    /**
+     * 已经挂上便宜版滤镜的面板（含它们原本的 backdrop-filter），清理时还原。
+     *
+     * 直接在这儿应用、而不是另开一个 effect：面板元素本来就在手上，
+     * 单独一个 effect 还得从 state 里反查面板，既绕又容易被「不许改依赖」的
+     * lint 规则拦下。
+     */
+    let appliedCheap: { panel: HTMLElement; previous: string }[] = [];
+
+    /**
+     * 把便宜版滤镜写到面板自己身上。
+     *
+     * 为什么不另开一层窗口：`backdrop-filter` 挂在谁身上，滤镜区域就是谁的
+     * 盒子。挂在一块一屏高的窗口上，窗口的边缘就是滤镜的边界——一条横穿
+     * 文章的硬边；挂在面板上时边界正好是面板自己的边界，看不出来。
+     */
+    const applyCheapFilters = (
+      list: { id: string; panel: HTMLElement }[],
+      filters: CheapFilter[],
+    ) => {
+      for (const { panel, previous } of appliedCheap) {
+        panel.style.backdropFilter = previous;
+      }
+      appliedCheap = [];
+
+      for (const { id, panel } of list) {
+        const filter = filters.find((item) => item.id === id);
+        if (!filter) continue;
+        appliedCheap.push({ panel, previous: panel.style.backdropFilter });
+        panel.style.backdropFilter = [
+          `url(#${filter.id})`,
+          `blur(${filter.blur}px)`,
+          `contrast(${filter.contrast})`,
+          `brightness(${filter.brightness})`,
+          `saturate(${filter.saturation})`,
+        ].join(" ");
+      }
+    };
+
+    // 调参面板改的是这个对象，每次重建元素时读最新值。
+    // 深浅两套分开存，所以这里跟着当前主题走
+    let params = getGlassParams(currentGlassTheme());
+    const root = document.documentElement;
 
     setLabRuntimeStatus("liquidglass", "loading");
 
-    /** 按当前主题换图。图没解码完就初始化的话，着色器采样到的是一张空图 */
-    const syncSource = async () => {
-      const url = currentBackgroundUrl();
-      if (!url || image.currentSrc.endsWith(url)) return;
-      image.src = url;
-      try {
-        await image.decode();
-      } catch {
-        // 解码失败就让它空着：着色器采样到空白，页面其余部分不受影响
+    /*
+      每次重建都算一遍「所有玻璃的矩形 + 当前参数」的签名，没变就直接返回。
+
+      两个原因：ResizeObserver 在开始观察时会先回调一次，滚动时吸顶元素的
+      矩形也可能连着几帧在变；没有守卫的话 `setElements` 会被反复调用，
+      而它会重置渲染器里这些元素的状态（正在进行的弹簧动画会被打断）。
+    */
+    let lastSignature = "";
+
+    /**
+     * 上次**真正提交**给渲染器的矩形（按元素 id）。
+     *
+     * 大块头的更新会被限流，这时保留它的旧矩形——渲染器的 setElements 是增量的，
+     * 矩形没变就不会重新光栅化，于是「大块头先不动、小块头照常跟」。
+     */
+
+    /** 按当前 DOM 量一批面板，交给渲染器 */
+    const buildElements = () => {
+      const found = [
+        ...document.querySelectorAll<HTMLElement>(
+          ".panel, .panel-strong, .panel-raised",
+        ),
+      ];
+
+      const elements: GlassElementConfig[] = [];
+      const nextPanels: HTMLElement[] = [];
+      const cheap: CheapFilter[] = [];
+      const cheapPanels: { id: string; panel: HTMLElement }[] = [];
+      const signatureParts: string[] = [];
+      for (const panel of found) {
+        const element = panelToElement(panel, elements.length, params);
+        if (element) {
+          if (elements.length >= MAX_PANELS) break;
+          elements.push(element);
+          nextPanels.push(panel);
+          signatureParts.push(
+            `${element.id}:${Math.round(element.rect.x)},${Math.round(element.rect.y)},${Math.round(element.rect.w)},${Math.round(element.rect.h)}`,
+          );
+          continue;
+        }
+
+        /*
+          没通过 WebGL 那套、但尺寸正常的（超长正文面板），改用便宜版：
+          不用 WebGL，一条 backdrop-filter 交给合成器。它省得不只是算力——
+          也省掉一个可能撑爆纹理上限的超长元素。
+        */
+        const fallback = cheapFallbackFor(panel, cheap.length, params);
+        if (!fallback) continue;
+        cheap.push(fallback);
+        cheapPanels.push({ id: fallback.id, panel });
+        nextPanels.push(panel);
+        signatureParts.push(
+          `cheap-${fallback.id}:${Math.round(fallback.width)}x${Math.round(fallback.height)}`,
+        );
       }
+      const signature = `${signatureParts.join("|")}#${JSON.stringify(params)}`;
+      if (signature === lastSignature) return;
+      lastSignature = signature;
+
+      panels = nextPanels;
+      applyCheapFilters(cheapPanels, cheap);
+      setCheapFilters(cheap);
+      renderer.setElements(elements);
+      syncContentHeight();
+      renderer.requestRender();
+
+      // 标记面板，让 CSS 把底转透明；空结果时不留标记，
+      // 面板就保持原本的亚克力外观（画布上也只剩壁纸）
+      const on = elements.length > 0 || cheap.length > 0;
+      for (const panel of panels) panel.setAttribute(PANEL_ATTR, "on");
+      setLabRuntimeStatus("liquidglass", on ? "ready" : "failed");
     };
 
-    const clearPlates = () => {
-      for (const panel of panels) panel.removeAttribute(PLATE_ATTR);
-      for (const plate of plates) plate.remove();
-      plates = [];
-      panels = [];
+    const syncSize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      renderer.resize(w, h);
     };
 
     /**
-     * 把一块面板的几何写进它的底板。
+     * 把「内容有多高」告诉渲染器。
      *
-     * 位置用**文档坐标**，所以底板和面板在同一个坐标系里一起滚，
-     * 滚动时不需要重算位置。只有吸顶/固定定位的面板是例外：
-     * 它们的位置本来就是视口坐标，底板也跟着固定在视口上。
+     * 这条不能省：`setScrollY` 内部用 `contentHeight - 视口高` 做钳制，
+     * contentHeight 没设过就是 0，于是每次同步过来的滚动量都被夹回 0——
+     * 表现就是「玻璃不随文字滚动」，页面滚下去了玻璃还停在原位。
      */
-    const placePlate = (plate: HTMLDivElement, panel: HTMLElement) => {
-      const rect = panel.getBoundingClientRect();
-      const style = getComputedStyle(panel);
-      const anchored = style.position === "sticky" || style.position === "fixed";
-      const radius = parseFloat(style.borderTopLeftRadius) || 0;
-
-      plate.style.position = anchored ? "fixed" : "absolute";
-      plate.style.left = `${rect.left + (anchored ? 0 : window.scrollX)}px`;
-      plate.style.top = `${rect.top + (anchored ? 0 : window.scrollY)}px`;
-      plate.style.width = `${rect.width}px`;
-      plate.style.height = `${rect.height}px`;
-      plate.style.borderRadius = style.borderRadius;
-      plate.dataset.config = JSON.stringify(plateConfig(radius, rect.width, rect.height));
-    };
-
-    /** 按当前 DOM 里的面板量一批底板。预算按当前屏幕算，见 glassPlan */
-    const buildPlates = () => {
-      clearPlates();
-
-      const plan = glassPlan();
-      const found = [...document.querySelectorAll<HTMLElement>(".panel")].filter(
-        (el) => !layer.contains(el),
+    const syncContentHeight = () => {
+      renderer.setContentHeight(
+        Math.max(
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight,
+          window.innerHeight,
+        ),
       );
+    };
 
-      for (const panel of found.slice(0, plan.maxPlates)) {
-        const rect = panel.getBoundingClientRect();
-        // 还没排版（或者被折叠）的元素量出来是 0，给它一块 0×0 的底板没有意义
-        if (rect.width < 8 || rect.height < 8) continue;
-        // 太大的面板不给玻璃，理由见 glassPlan
-        if (rect.width * rect.height > plan.maxPlateArea) continue;
+    /*
+      滚动同步：常驻 rAF 里读 window.scrollY，变化了就当场渲染。
 
-        const plate = document.createElement("div");
-        plate.className = "lab-lg-plate";
-        placePlate(plate, panel);
-        layer.append(plate);
-        plates.push(plate);
-        panels.push(panel);
+      两个细节都是为了压掉延迟，别改回「scroll 事件里 setScrollY」：
+
+      1. 不用 scroll 事件。事件派发时机和渲染帧不一定对齐，中间再套一层
+         requestAnimationFrame 就变成「事件 → 下一帧设偏移 → 再下一帧才画」，
+         玻璃会比正文慢两帧，快速滚动时肉眼可见地拖在后面。常驻 rAF 每帧读
+         一次当前值，只慢一帧。
+      2. setScrollY 内部只是 requestRender()，真正的绘制排在**下一帧**；这里
+         跟着同步调一次 render()，让画布和这一帧读到的滚动量对得上。那次被
+         排队的渲染随后会因为 needsRedraw 已被清掉而直接早退，不会白画。
+
+      剩下的延迟是结构性的：正文由合成器线程滚动，画布必须回主线程重画，
+      主线程一忙就会落在后面。要再压只能减少每帧开销（降 dpr、降模糊）。
+    */
+    /**
+     * 便宜的几何预检：只量矩形、不读计算样式。
+     *
+     * 每帧都跑一遍完整的 buildElements 会连着调 getComputedStyle（每块面板
+     * 一次），那是这一层最贵的操作。这里先只量矩形，变了才走完整重建——
+     * 静止时每帧的开销就只剩几次 getBoundingClientRect。
+     *
+     * 逐块返回而不是拼成一个长串：下面要靠「变化的是哪一块」决定要不要限流。
+     */
+    const geometryParts = () => {
+      const scrollY = window.scrollY;
+      const parts: string[] = [];
+      for (const panel of document.querySelectorAll<HTMLElement>(
+        ".panel, .panel-strong, .panel-raised",
+      )) {
+        const r = panel.getBoundingClientRect();
+        /*
+          跟随文档流的面板用**文档坐标**，别用视口坐标。
+
+          用视口坐标的话，滚动一下整串 token 就变了，于是每滚一帧都跑一遍
+          完整重建（里面还有每块面板的 getComputedStyle）——纯浪费：那些
+          面板的文档坐标根本没动，签名守卫随后也会判成「没变」。
+          吸顶元素反过来，它钉在视口上，就得看视口坐标。
+        */
+        const y = (scrollFlags.get(panel) ?? true) ? r.top + scrollY : r.top;
+        parts.push(
+          `${Math.round(r.left)},${Math.round(y)},${Math.round(r.width)},${Math.round(r.height)}`,
+        );
       }
+      return parts;
     };
 
-    /** 建这批底板时的视口。resize 时用它判断「小抖动」还是「换了环境」 */
-    let builtFor = { w: 0, h: 0, dpr: 1 };
+    /*
+      重绘期间降画质。
 
-    const teardown = () => {
-      delete layer.dataset.ready;
-      instance?.destroy();
-      instance = null;
-      clearPlates();
+      玻璃每帧的开销正比于「画布像素数 × 模糊开销」，而滚动、换页动画这类
+      连续重绘恰恰是最在意帧率、最不在意画质的时候。所以：连续变化持续一小段
+      时间就切到低画质（dpr 1、模糊降采样 2×），停手后再切回高画质。
+
+      判据是「**连续**变化持续了多久」，不是「距上次变化多久」。
+      后者会让每一次滚动停下、哪怕只停两帧，都立刻切回高画质——滚一下切两回，
+      而每次切换都要改 canvas 尺寸，画布一改尺寸就被清空，屏幕上就是黑闪。
+      所以：持续变化超过 HOLD 才降，停手超过 IDLE 才升，一次滚动最多切两次。
+
+      切换的实际动作也有两个讲究，都是为了不闪：
+
+      1. 改完 dpr 立刻**同步**渲染一次。canvas.width 一赋值画布就被清空，
+         等下一帧再画的话，中间那一帧就是黑的。
+      2. 不要连着调两次 resizeFBOs：dpr 变了时 resize 内部已经按新尺寸重建过
+         一遍（用的是当前的降采样值），再强制重建一次纯属白干。
+    */
+    const QUALITY_HOLD_MS = 80;
+    const QUALITY_IDLE_MS = 320;
+    /** 本轮连续变化的起点；0 表示当前不在「连续变化」里 */
+    let burstStart = 0;
+    let lastChangeAt = performance.now();
+    let lowQuality = false;
+
+    /** 高画质下的渲染倍率：跟设备走，但封顶 2（再高看不出差别，开销翻倍） */
+    const highDpr = Math.min(window.devicePixelRatio || 1, 2);
+    /*
+      低画质按比例降，而不是写死 1。
+
+      写死 1 在 dpr=1 的显示器上等于没降（实测：那条路径下高低两档的倍率
+      完全一样，档位形同虚设）。取 0.65 倍是像素数降到约 42%，
+      再叠上模糊降采样，重绘期间的开销大致减半，恢复后看不出痕迹。
+    */
+    const lowDpr = Math.max(0.5, highDpr * 0.65);
+
+    const applyQuality = (low: boolean) => {
+      if (low === lowQuality) return;
+      lowQuality = low;
+      renderer.dpr = low ? lowDpr : highDpr;
+      renderer.blurDownsample = low ? 2 : 1;
+
+      const canvas = renderer.canvas;
+      const beforeW = canvas.width;
+      const beforeH = canvas.height;
+      renderer.resize(window.innerWidth, window.innerHeight);
+      // 只改了降采样、画布尺寸没变时，resize 会提前返回，得强制重建一次
+      if (canvas.width === beforeW && canvas.height === beforeH) {
+        renderer.resizeFBOs(renderer.fboW, renderer.fboH, true);
+      }
+      // 同步画一帧：画布刚被清空过，别把黑的留给下一个合成帧
+      renderer.render();
     };
 
-    /** 全套重建：换页、初始化失败回滚时走这里 */
+    let rafId = 0;
+    let lastScrollY = -1;
+    let lastGeometryParts: string[] = [];
+
+    /*
+      变化期间的重建限流。
+
+      「正文宽度」是有过渡动画的：面板宽度会在几百毫秒里连续变化，逐帧重建
+      的话长面板每次都要重新生成一遍它的 SDF / 遮罩纹理，几十次下来就是明显
+      的一卡一卡。这里压到 MIN_BUILD_INTERVAL_MS 一次，动画一停再补一次精确
+      重建（tailPending），最终状态一定是对的。
+    */
+    const MIN_BUILD_INTERVAL_MS = 120;
+    let lastBuildAt = 0;
+    /** 限流期间被丢掉的那次重建，等几何停下来再补 */
+    let tailPending = false;
+
+    const tick = () => {
+      const now = performance.now();
+      const y = window.scrollY;
+      let changed = false;
+      if (y !== lastScrollY) {
+        lastScrollY = y;
+        renderer.setScrollY(y);
+        renderer.render();
+        changed = true;
+      }
+
+      /*
+        每帧核对一次几何。
+
+        为什么不能只靠 ResizeObserver：它只报**尺寸**变化，而玻璃要跟的东西
+        远不止尺寸——换页过渡、展开收起、悬停缩放、吸顶元素从「没吸住」到
+        「吸住」，这些改的是位置或合成变换，尺寸可以纹丝不动。少这一步的
+        表现就是「动画过程中玻璃不动」。
+
+        代价可以接受：预检只量矩形，是纯读操作（我们自己每帧不改布局，
+        不会触发强制重排）；几何变了才走完整重建，而重建内部还有一层签名
+        守卫兜底，不会白调 setElements、也不会打断渲染器里正在跑的弹簧动画。
+      */
+      const parts = geometryParts();
+      const geometryChanged =
+        parts.length !== lastGeometryParts.length ||
+        parts.some((part, i) => part !== lastGeometryParts[i]);
+      if (geometryChanged) {
+        lastGeometryParts = parts;
+        changed = true;
+        if (now - lastBuildAt >= MIN_BUILD_INTERVAL_MS) {
+          lastBuildAt = now;
+          tailPending = false;
+          buildElements();
+        } else {
+          // 这次先跳过，等几何稳定后由 tailPending 补一次
+          tailPending = true;
+        }
+      } else if (tailPending) {
+        // 几何停了，补上最后一次（此时量到的就是最终值）
+        tailPending = false;
+        lastBuildAt = now;
+        buildElements();
+      }
+
+      if (changed) {
+        lastChangeAt = now;
+        if (burstStart === 0) burstStart = now;
+      } else if (now - lastChangeAt > QUALITY_IDLE_MS) {
+        // 停手够久，本轮「连续变化」结束
+        burstStart = 0;
+      }
+      const busyFor = burstStart === 0 ? 0 : now - burstStart;
+      if (busyFor > QUALITY_HOLD_MS) applyQuality(true);
+      else if (now - lastChangeAt > QUALITY_IDLE_MS) applyQuality(false);
+
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const onResize = () => {
+      syncSize();
+      syncContentHeight();
+      // 尺寸变了要重新量面板（宽度档位变化会换行，高度也会变）
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(buildElements, 200);
+    };
+
     const start = async () => {
-      teardown();
-      await syncSource();
-      if (disposed) return;
-
-      buildPlates();
-      if (plates.length === 0) {
-        // 没有面板可垫就没有效果可言，不必去开一个 WebGL 上下文
+      const wallpaper = currentBackgroundUrl();
+      if (!wallpaper) {
         setLabRuntimeStatus("liquidglass", "failed");
         return;
       }
 
+      syncSize();
       try {
-        const { LiquidGlass } = await import("@ybouane/liquidglass");
-        if (disposed) return;
-
-        instance = await LiquidGlass.init({
-          root: layer,
-          glassElements: plates,
-          // 默认值也按当前主题给一份：每块底板的 data-config 已经带了完整参数，
-          // 这里是初始化阶段的兜底
-          defaults: presetForTheme(),
-        });
-
-        // init 是异步的，await 期间用户可能已经关掉开关、或者换了页
-        if (disposed) {
-          teardown();
-          return;
-        }
-
-        /*
-          面板转透明这一步放在初始化成功之后，是这次接线里最要紧的顺序：
-          先转透明再初始化，一旦库抛错（没有 WebGL、上下文被回收），
-          面板就变成「没有底的文字压在背景图上」——试验性代码绝不能
-          把页面弄成不可读的样子。
-        */
-        for (const panel of panels) panel.setAttribute(PLATE_ATTR, "on");
-        layer.dataset.ready = "on";
-        builtFor = {
-          w: window.innerWidth,
-          h: window.innerHeight,
-          dpr: window.devicePixelRatio || 1,
-        };
-        setLabRuntimeStatus("liquidglass", "ready");
-      } catch (error) {
-        console.warn("[lab] 液态玻璃初始化失败：", error);
-        teardown();
+        await renderer.loadWallpaper(await loadScrimmedWallpaper(wallpaper));
+      } catch {
         setLabRuntimeStatus("liquidglass", "failed");
+        return;
       }
-    };
-
-    /** 把所有底板的参数换成当前主题的预设，保留各自的几何 */
-    const syncPlateConfigs = () => {
-      for (const plate of plates) {
-        const config = plate.dataset.config;
-        if (!config) continue;
-        const parsed = JSON.parse(config) as { cornerRadius?: number };
-        const rect = plate.getBoundingClientRect();
-        plate.dataset.config = JSON.stringify(
-          plateConfig(parsed.cornerRadius ?? 0, rect.width, rect.height),
-        );
-      }
-    };
-
-    /**
-     * 把底板的几何重新量一遍（内容或窗口变化之后）。
-     *
-     * 底板的位置是初始化那一刻量下来的，而面板的高度会随内容变化
-     * （最典型的是这一行自己的状态文案：出现「已生效」之后它所属的面板
-     * 长高一行，后面所有面板整体下移）。不重新量，玻璃就停在旧位置，
-     * 看上去像整块错位。
-     */
-    const syncGeometry = () => {
-      plates.forEach((plate, index) => {
-        const panel = panels[index];
-        if (!panel || !panel.isConnected) return;
-        placePlate(plate, panel);
-      });
-    };
-
-    /**
-     * 只让「看得见的」底板重画。
-     *
-     * 库自己不做视口裁剪，而且 markChanged() 不带参数等于「把**所有**玻璃
-     * 标脏」——包括在屏幕外几屏的那些，长页面上那部分纯属白烧。
-     * 传元素进去，库只会重画与它相交的那几块。
-     */
-    const markVisibleChanged = () => {
-      if (!instance) return;
-      const height = window.innerHeight;
-      for (const plate of plates) {
-        const rect = plate.getBoundingClientRect();
-        if (rect.bottom < -CULL_MARGIN || rect.top > height + CULL_MARGIN) continue;
-        instance.markChanged(plate);
-      }
-    };
-
-    /*
-      滚动必须主动触发重画，这一条是这个实验能不能用起来的关键。
-
-      站点背景是 background-attachment: fixed（钉在视口上），而底板跟着文档走：
-      滚动时底板相对背景移动了，采样区域整个变了。库自己发现不了这件事
-      （它盯的是元素在 root 内有没有动，而底板和面板在 root 内是一起滚的），
-      结果就是底板里的画面停在滚动之前，看上去是「一块贴在旧位置上的玻璃」。
-
-      实测：不补这一手时，三个滚动位置下同一块底板 canvas 的平均亮度
-      一模一样（20/28/71/144），说明它压根没重画过。
-
-      代价是每滚动一帧就要重算一遍玻璃，所以这里按 REDRAW_INTERVAL 节流；
-      最后再补一次（scroll 事件会停，节流丢掉的最后一帧得自己补回来）。
-    */
-    let scrollScheduled = false;
-    let lastRedrawAt = 0;
-    let scrollSettleTimer = 0;
-
-    const onScroll = () => {
       if (disposed) return;
 
-      const now = performance.now();
-      if (!scrollScheduled && now - lastRedrawAt >= REDRAW_INTERVAL) {
-        scrollScheduled = true;
-        requestAnimationFrame(() => {
-          scrollScheduled = false;
-          lastRedrawAt = performance.now();
-          if (!disposed) markVisibleChanged();
-        });
+      buildElements();
+      lastScrollY = window.scrollY;
+      renderer.setScrollY(lastScrollY);
+      renderer.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      renderer.resize(window.innerWidth, window.innerHeight);
+      renderer.requestRender();
+      if (process.env.NODE_ENV !== "production") {
+        // 开发期把渲染器挂出来，方便验证滚动同步（生产构建会被 tree-shake）
+        (window as unknown as { __labGlass?: LiquidGlassRenderer }).__labGlass =
+          renderer;
       }
-
-      window.clearTimeout(scrollSettleTimer);
-      scrollSettleTimer = window.setTimeout(() => {
-        if (!disposed) markVisibleChanged();
-      }, 140);
-    };
-
-    /*
-      内容撑高/收短也要重算几何：状态文案出现、字体换行、图片加载完
-      都会让面板移动，而这些东西没有事件可听，只能观察尺寸。
-    */
-    let layoutScheduled = false;
-    const onLayoutChange = () => {
-      if (layoutScheduled || disposed) return;
-      layoutScheduled = true;
-      requestAnimationFrame(() => {
-        layoutScheduled = false;
-        if (disposed) return;
-        syncGeometry();
-        markVisibleChanged();
-      });
-    };
-    const sizeObserver = new ResizeObserver(onLayoutChange);
-
-    /*
-      换主题要做三件事：换成另一张背景图（深浅两张不是同一张）、
-      把底板参数换成对应主题的预设、让着色器重画一遍。
-
-      这里刻意不整套重建：重建要销毁再开一个 WebGL 上下文，切换时能卡住
-      一两秒；而库的 data-config 是会被重新读取的（它对每个玻璃元素挂着
-      attributeFilter: ["data-config"] 的观察器），改属性就够。
-    */
-    const themeObserver = new MutationObserver(() => {
-      void (async () => {
-        await syncSource();
-        syncPlateConfigs();
-        markVisibleChanged();
-      })();
-    });
-
-    /*
-      窗口尺寸变化分两种，处理方式不一样：
-
-      - 小抖动（拖一下窗口、滚动条出现）：ResizeObserver 已经负责重算几何，
-        这里只要让库重新采样；
-      - 大变化（换设备、手机旋转、改浏览器缩放）：底板数量和面积预算都该重算，
-        得整套重建。判据是宽或高变化超过两成，或者 DPR 变了（缩放/换屏）。
-
-      阈值不再细：重建要销毁再开一个 WebGL 上下文，代价远大于这几帧的观感。
-    */
-    let resizeTimer = 0;
-    const onResize = () => {
-      window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => {
-        if (disposed) return;
-        const dpr = window.devicePixelRatio || 1;
-        const dw = Math.abs(window.innerWidth - builtFor.w) / Math.max(builtFor.w, 1);
-        const dh = Math.abs(window.innerHeight - builtFor.h) / Math.max(builtFor.h, 1);
-        if (dw > 0.2 || dh > 0.2 || dpr !== builtFor.dpr) {
-          void start();
-          return;
-        }
-        syncGeometry();
-        markVisibleChanged();
-      }, 250);
+      // 到这一步画布上已经有壁纸了，才把 body 的 CSS 背景图收起来。
+      // 放在成功后：拿不到 WebGL 或壁纸解码失败时，页面还是原来的样子。
+      root.setAttribute(CANVAS_ATTR, "on");
     };
 
     void start();
-    window.addEventListener("scroll", onScroll, { passive: true });
+
+    // 面板那层薄纱的透明度是 CSS 变量，改一次就够
+    const syncTint = () => {
+      root.style.setProperty("--lab-glass-tint", String(params.tintAlpha));
+      // 深色主题的背景更亮更花，同样比例下更"透"，按 1.6 倍补一点
+      root.style.setProperty(
+        "--lab-glass-tint-dark",
+        String(Math.min(0.6, params.tintAlpha * 1.6)),
+      );
+    };
+
+    const unsubscribe = subscribeGlassParams(() => {
+      params = getGlassParams(currentGlassTheme());
+      syncTint();
+      // 参数只影响元素本身，重建一次即可（渲染器会重画）。
+      // 拖滑杆也是连续重绘，同样按「忙碌」处理，让它走低画质
+      lastChangeAt = performance.now();
+      buildElements();
+    });
+    syncTint();
+
+    // 内容长高（图片、字体晚到，或换页）也要重新报高度，否则滚到底部时
+    // 玻璃会被钳在旧的高度上、和正文错位
+    const contentObserver = new ResizeObserver(syncContentHeight);
+    contentObserver.observe(document.body);
+
+    /*
+      切主题要同时换三样东西，缺一样都会看出破绽：
+
+      1. 参数：深浅各一套（亮度差 0.02）；
+      2. 薄纱变量：同一套参数里的一部分；
+      3. **背景图**：两个主题的壁纸不是同一张，画布上还挂着旧的那张的话，
+         整页底色会和主题对不上。这一步最容易漏。
+
+      换壁纸本身是安全的：渲染器先把新图解码完、再替换纹理引用，
+      中间不会出现空白帧。所以这里不需要遮罩、也不用等过渡结束。
+    */
+    const themeObserver = new MutationObserver(() => {
+      void (async () => {
+        params = getGlassParams(currentGlassTheme());
+        syncTint();
+        buildElements();
+
+        const url = currentBackgroundUrl();
+        if (!url) return;
+        try {
+          await renderer.loadWallpaper(await loadScrimmedWallpaper(url));
+        } catch {
+          // 换图失败就继续用旧壁纸，总比空着强
+        }
+      })();
+    });
+    themeObserver.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+
     window.addEventListener("resize", onResize);
-    sizeObserver.observe(document.body);
-    themeObserver.observe(html, { attributes: true, attributeFilter: ["data-theme"] });
 
     return () => {
       disposed = true;
-      window.clearTimeout(scrollSettleTimer);
-      window.clearTimeout(resizeTimer);
+      unsubscribe();
       themeObserver.disconnect();
-      sizeObserver.disconnect();
-      window.removeEventListener("scroll", onScroll);
+      contentObserver.disconnect();
+      cancelAnimationFrame(rafId);
       window.removeEventListener("resize", onResize);
-      teardown();
-      setLabRuntimeStatus("liquidglass", "idle");
+      clearTimeout(resizeTimer);
+      for (const { panel, previous } of appliedCheap) {
+        panel.style.backdropFilter = previous;
+      }
+      for (const panel of panels) panel.removeAttribute(PANEL_ATTR);
+      root.removeAttribute(CANVAS_ATTR);
+      renderer.dispose();
     };
-  }, [pathname]);
+    // 刻意只依赖空数组：见上面那段说明
+  }, []);
 
   return (
-    <div className="lab-lg-layer" aria-hidden="true" ref={layerRef}>
-      {/* src 由 effect 按主题写入：静态导出的 HTML 里写死任何一张，
-          都会在另一种主题下先闪一下错的那张 */}
-      {/* eslint-disable-next-line @next/next/no-img-element --
-          这不是内容图片，是着色器的输入：库要拿到一个真 <img> 才能走
-          drawImage 的快速通道（next/image 的输出会被它当成普通 DOM 去跑
-          html-to-image 光栅化，又慢又可能被改写 src）。它铺满视口且
-          aria-hidden，不承担任何语义。 */}
-      <img className="lab-lg-bg" alt="" ref={imageRef} />
-    </div>
+    <>
+      <div className="lab-lg-canvas" aria-hidden="true">
+        <canvas ref={canvasRef} />
+      </div>
+
+      {/* 便宜版的滤镜定义。display:none 不行：按 id 引用的滤镜会被隐藏掉整棵
+          子树弄失效，所以用 0 尺寸 + overflow:hidden 藏。 */}
+      {cheapFilters.length > 0 ? (
+        <svg className="lab-lg-defs" aria-hidden="true" focusable="false">
+          <defs>
+            {cheapFilters.map((filter) => (
+              <filter
+                id={filter.id}
+                key={filter.id}
+                filterUnits="userSpaceOnUse"
+                x="0"
+                y="0"
+                width={filter.width}
+                height={filter.height}
+                colorInterpolationFilters="sRGB"
+              >
+                <feImage
+                  href={filter.url}
+                  x="0"
+                  y="0"
+                  width={filter.width}
+                  height={filter.height}
+                  preserveAspectRatio="none"
+                  result="map"
+                />
+                <feDisplacementMap
+                  in="SourceGraphic"
+                  in2="map"
+                  scale={filter.scale}
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+              </filter>
+            ))}
+          </defs>
+        </svg>
+      ) : null}
+    </>
   );
 }

@@ -8,6 +8,27 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+# 授权约束
+
+本站源码是 **AGPL-3.0**（根目录 `LICENSE`），文章正文是 CC BY-NC-SA 4.0。
+
+- 引入任何第三方代码前，先确认它的协议能不能和 AGPL 共存；MIT/BSD/Apache-2.0
+  可以（保留原声明即可），标着「非商业」「仅限学习」之类的**不行**。
+- 引入 AGPL 的东西不需要额外操作，但整个服务就都归 AGPL 管了；**不要**只把
+  新引入的组件单独标成 AGPL，那和实际授权状态不符。
+- 底栏和「关于」页的授权文案必须与实际一致，且「源码」链接指向**仓库**——
+  AGPL 第 13 条要求向网络使用者提供完整源码，只链一份协议正文不算履行。
+
+# 本地验证环境
+
+用无头浏览器 + CDP 做页面验证时，**只结束自己启动的那个进程**：
+
+- 启动时用 `Start-Process -PassThru` 拿到 PID 并记下来，结束时
+  `taskkill /F /T /PID <pid>`（只杀这一棵进程树）；
+- 不要用 `taskkill /IM msedge.exe`、`pkill` 这类按映像名批量结束的命令——
+  用户可能正开着浏览器在看站点，一次误杀会把他所有窗口一起关掉；
+- 无头实例统一用独立的 `--user-data-dir`，别和用户日常配置混用。
+
 # 博文写作指导
 
 新增或修改 `src/content/*.mdx` 博文时，遵循以下原则：

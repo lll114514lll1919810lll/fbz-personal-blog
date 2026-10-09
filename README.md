@@ -139,12 +139,31 @@ pnpm preview:cf
 `src/app/globals.css` 末尾加一段 `:root[data-lab-<id>="<值>"]` 的覆盖规则。
 运行时型的实验还要在 `lab-runtimes.tsx` 里注册一个组件。
 
-目前唯一一个运行时实验是「液态玻璃」：它用
-[@ybouane/liquidglass](https://github.com/ybouane/liquidglass)（MIT）把面板
-换成真玻璃——库要求玻璃元素是它 root 的直接子元素，而本站面板是嵌套的，
-所以做法是给每块面板垫一块同位置同尺寸的「玻璃底板」，面板自己转成透明底
-（见 `components/lab-liquidglass.tsx` 的说明）。参数取自演示页的
-Regular Glass（浅色）与 Dark Glass（深色）两套预设。
+目前唯一一个运行时实验是「液态玻璃」：用
+[liquid-glass-webgl](https://github.com/martin65536/liquid-glass-webgl) 的
+WebGL 渲染器（AGPL-3.0）画一层玻璃；**超长文章的面板**（那种几千到几万像素
+高的）另走一条便宜的 SVG 滤镜路线，来自
+[shuding/liquid-glass](https://github.com/shuding/liquid-glass)（MIT）——
+不用 WebGL，一条 `backdrop-filter` 交给合成器，位图只生成一次。
+
+接线上没有用上游自带的宿主组件——那套要求把整个界面描述成
+`GlassElementConfig[]`，连文字和滚动都在它的 canvas 里，照做就得把整站
+重写一遍，还会丢掉 SEO、可访问性、复制粘贴。这里只实例化它的
+`LiquidGlassRenderer`，当成「一层玻璃画布」铺在正文下面：画布画
+「背景图 + 每块面板位置上的玻璃」，正文依旧是真实 DOM 并压在玻璃上，
+所以文字仍可选中、可搜索、可被搜索引擎读到。
+
+渲染器与 shader 原样放在 `src/components/liquid-glass/`，来源、协议和
+我们对上游做过的类型修补都记在那个目录的 `README.md` 里。
+
+代价是整站源码因此按 AGPL-3.0 发布（见下面的说明），另外它需要 WebGL，
+老设备上可能掉帧。
+
+观感与性能都还不理想：底板每帧都要重算，滚动会掉帧；玻璃块数一多，还要
+按屏幕预算往下砍。留着是为了先占住实验的位置，之后再换更省的做法。
+
+观感与性能都还不理想：底板每帧都要重算，滚动会掉帧。留着是为了先占住
+实验的位置，后面再换更省的做法。
 
 ## 设计说明
 
@@ -156,9 +175,21 @@ Regular Glass（浅色）与 Dark Glass（深色）两套预设。
 
 | 范围 | 协议 |
 | --- | --- |
-| 主题、组件、配置和脚本等源码 | [MIT](./LICENSE) |
+| 主题、组件、配置和脚本等源码 | [AGPL-3.0](./LICENSE) |
 | `src/content/` 中的文章正文 | [CC BY-NC-SA 4.0](./CONTENT-LICENSE.md) |
-| 文章中引用的代码片段 | 按 MIT 处理 |
+| 文章中自己写的代码片段 | 按 MIT 处理 |
+| `src/components/liquid-glass/`（第三方） | [AGPL-3.0](https://github.com/martin65536/liquid-glass-webgl) |
 
-简单说：主题可以修改和商用；文章转载、翻译和改写需要署名、不得商用，
-衍生作品使用同一协议。
+简单说：源码可以修改和商用，但衍生作品要同样开源，并且通过网络提供服务时
+要把源码提供给使用者（本站源码公开，底栏与「关于」页都有链接）；文章转载、
+翻译和改写需要署名、不得商用，衍生作品使用同一协议。
+
+### 为什么代码是 AGPL
+
+站点集成了 [liquid-glass-webgl](https://github.com/martin65536/liquid-glass-webgl)
+（AGPL-3.0）的液态玻璃渲染器。AGPL 要求「通过网络提供服务时向使用者提供
+完整源码」，这个义务覆盖整个服务，不能只把引入的那一个组件单独标注，因此
+全站源码按 AGPL-3.0 发布。
+
+2026-10-09 之前的提交是按 MIT 发布的，那部分授权不因这次变更而收回；
+之后的版本按 AGPL-3.0。

@@ -1,6 +1,7 @@
 {
   "name": "fbz-personal-blog",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -19,7 +20,6 @@
     "@mdx-js/react": "^3.1.1",
     "@next/mdx": "^16.3.8",
     "@types/mdx": "^2.0.14",
-    "@ybouane/liquidglass": "^1.0.3",
     "github-slugger": "^2.0.0",
     "next": "16.3.8",
     "react": "19.2.8",

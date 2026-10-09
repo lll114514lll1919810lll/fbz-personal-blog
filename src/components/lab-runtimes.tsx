@@ -1,7 +1,7 @@
 "use client";
 
 import type { JSX } from "react";
-import { LiquidGlassBackground } from "@/components/lab-liquidglass";
+import { LiquidGlassPanels } from "@/components/lab-liquidglass";
 import { LABS, type LabRuntimeId } from "@/lib/labs";
 import { useLabs } from "@/lib/use-labs";
 
@@ -18,7 +18,7 @@ import { useLabs } from "@/lib/use-labs";
  * 加一个运行时实验 = LABS 里那一项写 runtime + 这里注册一个组件。
  */
 const RUNTIMES: Record<LabRuntimeId, () => JSX.Element> = {
-  liquidglass: LiquidGlassBackground,
+  liquidglass: LiquidGlassPanels,
 };
 
 export function LabRuntimes() {

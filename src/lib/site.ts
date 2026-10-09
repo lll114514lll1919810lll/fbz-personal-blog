@@ -20,22 +20,30 @@ export const siteConfig = {
  * 版权与授权。
  *
  * 这个站是「代码」和「内容」两套授权并行的：
- * - 框架、组件、样式等源码走 MIT，见仓库根目录的 LICENSE；
+ * - 框架、组件、样式等源码走 AGPL-3.0，见仓库根目录的 LICENSE；
  * - 文章正文走 CC BY-NC-SA 4.0（署名 - 非商业性 - 相同方式共享），
  *   详见根目录的 CONTENT-LICENSE.md。
  *
- * 分开的理由很直接：博客主题可以被任何人拿去改着用、甚至用在商业项目里，
- * 而文章是作者写的东西，不希望被收费转载或塞进付费课程。GitHub 也认这套
- * 分类法——仓库选择一个 license 字段，文章的授权只能靠这里的常量和
- * CONTENT-LICENSE.md 声明。
+ * 代码为什么是 AGPL 而不是 MIT：站点集成了
+ * [liquid-glass-webgl](https://github.com/martin65536/liquid-glass-webgl)
+ * 的液态玻璃渲染器，那个项目是 AGPL-3.0。AGPL 的要求是「通过网络提供服务
+ * 时，必须向使用者提供完整源码」，所以整个站点的源码都得按 AGPL 走，
+ * 不能只把那一个组件单独标成 AGPL。源码仓库公开，底栏和「关于」页都给了
+ * 链接，这一条就算履行了。
+ *
+ * 注意 AGPL 限制的是「要不要公开源码」，不限制商用——想拿去改着用、甚至
+ * 用在商业项目里都可以，条件是衍生作品同样开源，并且通过网络提供服务时
+ * 也要把源码给出去。文章那头是另一回事：不希望被收费转载或塞进付费课程。
  *
  * 这里只存「给人看的文案」和链接，具体的权利义务以根目录两份文件为准，
  * 避免同一套条款在两处各写一遍、日后改漏。
  */
 export const LICENSE = {
-  // 源码（MIT）
-  code: "MIT",
-  codeUrl: "https://opensource.org/license/mit",
+  // 源码（AGPL-3.0）。codeUrl 直接指向仓库而不是协议正文：
+  // AGPL 第 13 条要求向网络使用者「提供完整源码」，指向仓库才算履行，
+  // 只链一份协议全文不算。
+  code: "AGPL-3.0",
+  codeUrl: "https://github.com/lll114514lll1919810lll/fbz-personal-blog",
   // 文章正文（Creative Commons）
   content: "CC BY-NC-SA 4.0",
   contentUrl: "https://creativecommons.org/licenses/by-nc-sa/4.0/",

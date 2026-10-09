@@ -24,7 +24,7 @@ async function main() {
   const base = process.env.BASE_URL ?? "http://localhost:3000";
   let reachable = true;
   try {
-    await fetch(`${base}/blog/nextjs-16-breaking-changes`, { cache: "no-store" });
+    await fetch(`${base}/blog/4-dsh-opencode-free-models`, { cache: "no-store" });
   } catch {
     reachable = false;
   }
@@ -32,18 +32,25 @@ async function main() {
   if (reachable) {
     console.log("目录锚点一致性（对比真实渲染的 HTML）");
     const html = await (
-      await fetch(`${base}/blog/nextjs-16-breaking-changes`, { cache: "no-store" })
+      await fetch(`${base}/blog/4-dsh-opencode-free-models`, { cache: "no-store" })
     ).text();
 
+    /*
+      页面上带 id 的 h2/h3 不止正文标题：文章末尾还有评论区的
+      `<h2 id="comments-heading">留言</h2>`。所以**不能比总数**，
+      要比「正文那一段」——正文标题在文档流里排在前面，取同样数量的前缀
+      逐个对照即可；这样多出多少个别的区块都不影响。
+    */
     const renderedIds = [...html.matchAll(/<h[23][^>]*\sid="([^"]+)"/g)].map(
       (m) => m[1],
     );
-    const tocIds = getTableOfContents("nextjs-16-breaking-changes").map((i) => i.id);
+    const tocIds = getTableOfContents("4-dsh-opencode-free-models").map((i) => i.id);
 
     check(
-      "提取到的 id 数量与页面一致",
-      renderedIds.length === tocIds.length,
-      `页面: ${renderedIds.length} 个, 目录: ${tocIds.length} 个`,
+      "正文标题与目录一一对应（顺序也一致）",
+      renderedIds.length >= tocIds.length &&
+        tocIds.every((id, index) => renderedIds[index] === id),
+      `页面前 ${tocIds.length} 个: ${renderedIds.slice(0, tocIds.length).join(", ")}`,
     );
 
     for (const id of tocIds) {
@@ -53,7 +60,7 @@ async function main() {
     // 含行内代码的标题：两边都要基于剥离后的纯文本算 slug
     check(
       "含行内代码的标题 slug 正确",
-      tocIds.includes("1-params-和-searchparams-变成了-promise"),
+      tocIds.includes("坑一socks5h-在插件里会被判非法"),
       `实际得到: ${tocIds.join(", ")}`,
     );
   } else {
@@ -61,7 +68,7 @@ async function main() {
   }
 
   console.log("\n目录解析");
-  const toc = getTableOfContents("hello-world");
+  const toc = getTableOfContents("1-hello-world");
   check("能提取到目录", toc.length > 0);
   check("不包含 h1（标题由页头渲染）", toc.every((i) => i.depth >= 2));
   check(

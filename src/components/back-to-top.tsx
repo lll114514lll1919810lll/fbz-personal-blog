@@ -9,7 +9,7 @@ import { scrollToTop } from "@/lib/scroll";
  * 只在文章页渲染（长文才需要），固定在右下角。
  *
  * 几个细节：
- * - 滚过约一屏才出现。刚进页面就冒出一个「回到顶部」是多余的。
+ * - 文章顶端滚出视口才出现。刚进文章就冒出一个「回到顶部」是多余的。
  * - 隐藏时不能用 opacity: 0 了事——那样的按钮仍可被 Tab 聚焦，
  *   键盘用户会 tab 到一个看不见的东西。所以同时设 tabIndex=-1 和
  *   aria-hidden，把它真正移出可访问树。
@@ -27,10 +27,24 @@ export function BackToTop() {
   useEffect(() => {
     let frame = 0;
     let footer: HTMLElement | null = null;
+    let post: HTMLElement | null = null;
 
     const update = () => {
       frame = 0;
-      setVisible(window.scrollY > window.innerHeight * 0.8);
+      /*
+        出现时机按**文章的顶边**算，不用滚动了多少像素。
+
+        原来是一刀切「滚过约 0.8 屏」：文章页开头有大块 hero 和标题，滚过
+        0.8 屏时文章才刚露头，按钮就已经压在正文上了——看起来像刚进页面
+        就冒出来。按文章的顶边走，语义才是「你已经在正文里了」。
+      */
+      post = post ?? document.querySelector("article");
+      setVisible(
+        post
+          ? post.getBoundingClientRect().top <= 0
+          : // 拿不到文章元素就退回原来的像素阈值（其它页面复用这个组件时）
+            window.scrollY > window.innerHeight * 0.8,
+      );
 
       footer = footer ?? document.querySelector("footer");
       if (!footer) return;

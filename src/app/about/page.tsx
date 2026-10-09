@@ -81,24 +81,30 @@ export default function AboutPage() {
         <p>
           这个站分两部分授权。<strong>主题代码</strong>用{" "}
           <a href={LICENSE.codeUrl} target="_blank" rel="noreferrer">
-            MIT
+            AGPL-3.0
           </a>
-          ，随你改、可以商用；<strong>文章正文</strong>用{" "}
+          ：可以改、可以商用，但衍生作品要同样开源，并且通过网络提供服务时
+          要把源码给使用者；<strong>文章正文</strong>用{" "}
           <a href={LICENSE.contentUrl} target="_blank" rel="noreferrer">
             CC BY-NC-SA 4.0
           </a>
           ，转载和翻译都欢迎，但要署名、不能商用，改了再发得沿用同一协议。
         </p>
         <p>
-          本站源码仓库链接在{" "}
-          <a 
-            href={siteConfig.repo}
+          代码用 AGPL 是被一个依赖带过来的：本站的液态玻璃用了{" "}
+          <a
+            href="https://github.com/martin65536/liquid-glass-webgl"
             target="_blank"
             rel="noreferrer"
           >
-            这里
+            liquid-glass-webgl
           </a>
-          {" "}，细节写在仓库的{" "}
+          （AGPL-3.0），它要求整个服务向使用者提供源码，所以整站源码一并按
+          AGPL 走。完整的源码在{" "}
+          <a href={siteConfig.repo} target="_blank" rel="noreferrer">
+            仓库
+          </a>
+          ，文章内容的细节写在{" "}
           <a
             href={`${siteConfig.repo}/blob/main/CONTENT-LICENSE.md`}
             target="_blank"
@@ -106,7 +112,8 @@ export default function AboutPage() {
           >
             CONTENT-LICENSE.md
           </a>
-          {" "}。文章里引用的代码块按 MIT 处理，直接拿去用即可。
+          {" "}。文章里自己写的代码片段可以当 MIT 用，直接拿去即可——但摘录自
+          上面那个第三方组件的代码不在此列。
         </p>
 
         <h2>关于我</h2>
