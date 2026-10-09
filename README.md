@@ -53,7 +53,7 @@ export const metadata = {
   date: "2026-10-09",
   publishedAt: "2026-10-09T20:30",
   description: "一句话摘要",
-  tags: ["技术", "随笔"],
+  tags: ["建站", "技术"],
   draft: false,
 }
 
