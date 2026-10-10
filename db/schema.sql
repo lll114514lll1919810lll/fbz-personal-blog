@@ -54,3 +54,20 @@ CREATE INDEX IF NOT EXISTS idx_comments_ip_created
 
 -- 删除顶层留言时要级联删掉它的回复，按 parent_id 找子项需要索引。
 CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments (parent_id);
+
+-- 站点开关。存「后台可改、需要跨部署保留」的那类状态，目前只有一项：
+--   comments_locked  "1" = 全站锁定，不接受新评论
+--
+-- 为什么不放环境变量：改了要重新部署才生效，而且 functions 没有写入口，
+-- 后台点一下开关必须当场落库。
+-- 为什么是 key-value 而不是一个开关一列：以后再加开关不用改表结构。
+--
+-- 不预插默认记录：缺行按「未锁」处理（见 functions/_lib/api.js 的
+-- commentsLocked），新库开箱即用。
+--
+-- 已有库的升级脚本在 db/migrations/0003-add-settings.sql。
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  -- 一律存文本。布尔用 "0"/"1"，读的人不用猜 SQLite 的动态类型存了什么。
+  value TEXT NOT NULL
+);

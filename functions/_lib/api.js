@@ -214,6 +214,59 @@ export async function deleteCommentCascade(db, table, id) {
   return (children.meta?.changes ?? 0) + (self.meta?.changes ?? 0);
 }
 
+/* ----------------------------------------------------------- 站点开关 --- */
+
+/** 全站评论锁的键名。值是 "0" / "1" */
+export const COMMENTS_LOCKED_KEY = "comments_locked";
+
+/**
+ * 读全站评论锁。
+ *
+ * 三种「读不到」的情况一律按**未锁**处理：
+ *   - settings 表不存在（忘了跑 0003 迁移）
+ *   - 没有这一行（从没拨过开关）
+ *   - 查询本身出错
+ *
+ * 理由是失败方向：漏跑迁移就让评论全部消失，是个比「锁没生效」严重得多的
+ * 故障，而且现场看起来像数据库坏了，很难往「少跑一个 SQL 文件」上想。
+ * 反过来，锁没生效最多是后台那个开关暂时不起作用，页面上一眼就能看出来。
+ *
+ * 表不存在时 prepare 会抛，所以整段要包起来——这个函数在每次发表前都会跑，
+ * 不能因为一次异常把请求打成 500。
+ */
+export async function commentsLocked(db) {
+  if (!db) return false;
+  try {
+    const row = await db
+      .prepare(`SELECT value FROM settings WHERE key = ?1`)
+      .bind(COMMENTS_LOCKED_KEY)
+      .first();
+    return row ? String(row.value) === "1" : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 写全站评论锁。
+ *
+ * upsert 用 ON CONFLICT 而不是 INSERT OR REPLACE：后者会先删再插，
+ * 将来这张表要是加了别的列（比如记录谁改的、什么时候改的），
+ * 那些列会被无声清掉。
+ *
+ * 这里**不**吞异常：后台拨开关必须知道有没有真的写进去，
+ * 静默失败会让人以为锁上了、实际没有——那比报错危险。
+ */
+export async function setCommentsLocked(db, locked) {
+  await db
+    .prepare(
+      `INSERT INTO settings (key, value) VALUES (?1, ?2)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    )
+    .bind(COMMENTS_LOCKED_KEY, locked ? "1" : "0")
+    .run();
+}
+
 /* --------------------------------------------------------------- 管理 --- */
 
 /**

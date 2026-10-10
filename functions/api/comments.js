@@ -3,6 +3,10 @@
  *
  *   GET    /api/comments?page=<slug>                         列出某篇文章的评论
  *   POST   /api/comments   { page, name, text, parent_id? }  发表评论或回复
+ *
+ * 全站评论锁（后台 /admin 可拨）打开时，GET 照常返回列表、只多带一个
+ * locked 标记，POST 一律 403。已有留言仍然可读——锁的是「不接受新评论」，
+ * 不是把评论区整块藏起来。
  *   DELETE /api/comments?id=<id>&key=<ADMIN_KEY>             管理员删除（级联删回复）
  *
  * 设计取舍：
@@ -15,6 +19,7 @@
 
 import {
   adminAuthorized,
+  commentsLocked,
   countRecent,
   createHandlers,
   deleteCommentCascade,
@@ -64,11 +69,36 @@ async function handle(request, env, url) {
       .bind(page)
       .all();
 
-    return json(res.results || [], 200, origin);
+    /*
+      列表和锁状态一起返回，前端不用多发一个请求去问「现在能留言吗」。
+
+      形状从「裸数组」变成 { items, locked }，所以前端那边要同步改；
+      它已经有「返回的不是数组就报错」的兜底，不会因为结构变了白屏。
+
+      no-store：这个响应现在带运行时状态（锁），不能让任何一层缓存把它
+      定住——否则后台刚锁上，访客看到的还是「可以留言」。
+    */
+    const locked = await commentsLocked(env.DB);
+    return json(
+      { items: res.results || [], locked },
+      200,
+      origin,
+      { "cache-control": "no-store" },
+    );
   }
 
   /* ------------------------------------------------------------ 发表 --- */
   if (request.method === "POST") {
+    /*
+      锁的检查放在最前面，先于一切校验和写库。
+
+      这是**唯一的强制点**——前端隐藏表单只是体验，绕过界面直接 POST 才是
+      真实威胁，所以必须在服务端挡。
+    */
+    if (await commentsLocked(env.DB)) {
+      return json({ error: "博主已暂停接受新评论", locked: true }, 403, origin);
+    }
+
     const body = await readJson(request);
     if (!body) return json({ error: "请求格式不对" }, 400, origin);
 

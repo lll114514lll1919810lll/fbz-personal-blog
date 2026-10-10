@@ -43,6 +43,13 @@ const MAX_NAME = 24;
 export function Comments({ page }: { page: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [status, setStatus] = useState<Status>("loading");
+  /**
+   * 全站评论锁（后台 /admin 可拨）。
+   *
+   * 只用来决定界面显示什么：表单换成一句说明、回复按钮收起来。
+   * 真正的强制在服务端（POST 一律 403），所以这里判断错了也不会漏评论。
+   */
+  const [locked, setLocked] = useState(false);
   const [notice, setNotice] = useState("");
   /** 是否跑在本机（决定显示开发者提示还是访客提示） */
   const [isLocal, setIsLocal] = useState(false);
@@ -123,13 +130,24 @@ export function Comments({ page }: { page: string }) {
         }
         if (!listRes.ok) throw new Error(String(listRes.status));
 
-        const list = await listRes.json();
-        // 后端出错时会返回错误对象而不是数组，这里挡一道，
-        // 否则下面的分组会直接抛错、整块评论变成白屏
-        if (!Array.isArray(list)) throw new Error("bad payload");
+        /*
+          返回形状是 { items, locked }：列表和「全站评论锁」的状态一起给，
+          前端不必多发一个请求去问现在能不能留言。
+
+          后端出错时会返回错误对象而不是这个形状，这里挡一道，
+          否则下面的分组会直接抛错、整块评论变成白屏。
+        */
+        const payload = await listRes.json();
+        const list = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.items)
+            ? payload.items
+            : null;
+        if (!list) throw new Error("bad payload");
 
         if (controller.signal.aborted) return;
         setComments(list);
+        setLocked(Boolean(payload?.locked));
         setStatus("ready");
       } catch {
         if (controller.signal.aborted) return;
@@ -343,16 +361,20 @@ export function Comments({ page }: { page: string }) {
           {relativeTime(c.created_at)}
         </time>
         <span className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setReplyTo(replyTo === c.id ? null : c.id);
-              setNotice("");
-            }}
-            className="text-xs text-muted transition-colors hover:text-accent"
-          >
-            {replyTo === c.id ? "取消" : "回复"}
-          </button>
+          {/* 锁上时连「回复」按钮都不给：留一个点开必然失败的输入框，
+              比直接没有更让人困惑 */}
+          {!locked && (
+            <button
+              type="button"
+              onClick={() => {
+                setReplyTo(replyTo === c.id ? null : c.id);
+                setNotice("");
+              }}
+              className="text-xs text-muted transition-colors hover:text-accent"
+            >
+              {replyTo === c.id ? "取消" : "回复"}
+            </button>
+          )}
 
           {isAdmin && (
             <>
@@ -533,14 +555,29 @@ export function Comments({ page }: { page: string }) {
             </Link>
           </p>
         ) : (
-          status === "ready" && (
+          status === "ready" &&
+          (locked ? (
+            <p className="text-xs text-muted">博主已暂停接受新评论</p>
+          ) : (
             <p className="text-xs text-muted">无需登录，昵称可留空</p>
-          )
+          ))
         )}
       </div>
 
+      {/*
+        锁上时用一段说明替掉整个表单。
+
+        不是 disabled：一个灰掉的输入框会让人以为是自己的问题（没填对、
+        网络差），而事实是博主关了评论。说清楚比留个能点不能用的框好。
+      */}
+      {status === "ready" && locked && (
+        <p className="mt-6 text-sm leading-relaxed text-muted">
+          这篇文章的留言已暂停——博主关闭了新评论。已有留言仍然可以看。
+        </p>
+      )}
+
       {/* 表单：只有服务可用时才呈现，避免本地开发看到一个必然失败的输入框 */}
-      {status === "ready" && (
+      {status === "ready" && !locked && (
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3">
           <label className="sr-only" htmlFor="comment-name">
             昵称（可留空）
