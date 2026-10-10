@@ -53,7 +53,7 @@ export const LAB_GROUPS: Record<LabGroupId, { label: string; hint: string }> = {
   },
   surface: {
     label: "面板材质",
-    hint: "与上面的外观材质互不相干，可以自由组合。",
+    hint: "与上面的外观材质互不相干，可以自由组合。随便自由组合可能导致糟糕的后果，比如 ⌈液态玻璃⌋ + ⌈书本⌋ + 浅色模式 。不信可以试试。",
   },
 };
 
