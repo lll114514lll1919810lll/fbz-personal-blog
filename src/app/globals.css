@@ -2339,13 +2339,13 @@ html {
     font-weight: 600;
   }
 
-  /* 到头的上一页/下一页：留着占位，让页码始终居中，
-     不因为某一端消失而整排偏移 */
+  /* 到头的翻页控件：留着占位，让页码始终居中，不因为某一端消失而整排
+     偏移。保留底色，避免文字直接压在背景图上导致对比度不足。 */
   .lab-page-link.is-off {
-    border-color: transparent;
-    background: transparent;
+    border-color: var(--border);
+    background: var(--panel-bg-raised);
     color: var(--muted);
-    opacity: 0.45;
+    opacity: 0.65;
   }
 
 .btn-pill {
@@ -2380,7 +2380,8 @@ html {
 }
 
 .btn-pill:disabled {
-  opacity: 0.55;
+  background: var(--panel-bg-raised);
+  opacity: 0.65;
   cursor: not-allowed;
 }
 

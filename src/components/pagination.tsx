@@ -11,8 +11,8 @@ import Link from "next/link";
  * - 当前页用 `<span aria-current="page">` 而不是 button：它不可点，
  *   做成按钮会让人以为按了有用。
  *
- * 上下页两端常驻，是因为它们比跳某一页用得多：翻到新一页后，下一步
- * 几乎总是「再往后翻一页」。
+ * 首页/末页和上下页两端常驻，方便在长列表里快速回到边界；
+ * 到头时保留占位，避免整排按钮左右跳动。
  */
 
 /** 当前页两边各留几个页码 */
@@ -71,6 +71,16 @@ export function Pagination({ page, totalPages }: { page: number; totalPages: num
       aria-label="文章分页"
       className="flex flex-wrap items-center justify-center gap-2"
     >
+      {page > 1 ? (
+        <Link href={hrefFor(1)} className="lab-page-link panel" aria-label="第一页">
+          首页
+        </Link>
+      ) : (
+        <span aria-hidden className="lab-page-link is-off">
+          首页
+        </span>
+      )}
+
       {hasPrev ? (
         <Link href={hrefFor(page - 1)} className="lab-page-link panel" rel="prev">
           上一页
@@ -118,6 +128,20 @@ export function Pagination({ page, totalPages }: { page: number; totalPages: num
       ) : (
         <span aria-hidden className="lab-page-link is-off">
           下一页
+        </span>
+      )}
+
+      {page < totalPages ? (
+        <Link
+          href={hrefFor(totalPages)}
+          className="lab-page-link panel"
+          aria-label="最后一页"
+        >
+          末页
+        </Link>
+      ) : (
+        <span aria-hidden className="lab-page-link is-off">
+          末页
         </span>
       )}
     </nav>

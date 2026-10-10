@@ -456,8 +456,16 @@ export function AdminDashboard() {
       {(hasPrev || hasNext) && (
         <nav
           aria-label="分页"
-          className="flex items-center justify-between gap-3"
+          className="flex flex-wrap items-center justify-between gap-3"
         >
+          <button
+            type="button"
+            disabled={!hasPrev}
+            onClick={() => setOffset(0)}
+            className="btn-pill"
+          >
+            首页
+          </button>
           <button
             type="button"
             disabled={!hasPrev}
@@ -477,6 +485,14 @@ export function AdminDashboard() {
             className="btn-pill"
           >
             下一页 →
+          </button>
+          <button
+            type="button"
+            disabled={!hasNext}
+            onClick={() => setOffset((pageCount - 1) * PAGE_SIZE)}
+            className="btn-pill"
+          >
+            末页
           </button>
         </nav>
       )}
