@@ -22,6 +22,31 @@
  *     800×32000 的面板上就是几千像素的位移，那是坏的而不是折射。
  */
 
+/**
+ * 这套便宜版在当前浏览器里能用吗。
+ *
+ * 它靠 `backdrop-filter: url(#…)` 里的 SVG 滤镜做位移，而**这是 Chromium 专有**：
+ * Firefox 只支持 backdrop-filter 里那些标准滤镜函数（blur / saturate / …），
+ * 遇到 url() 整条声明会失效——面板就只剩下一层两成透明的底，比不做还难看。
+ * 所以先问一句再决定用不用；不支持就让面板保持原本的亚克力外观。
+ *
+ * 两道判断，都不多余：
+ *
+ * 1. `CSS.supports` 只看**语法**。Firefox 的 backdrop-filter 语法里恰好收 url()，
+ *    却不执行 SVG 滤镜，所以它能返回 true 而实际不生效。
+ * 2. 因此再补一道引擎判断。宁可少用（Gecko 上退回亚克力），也不要给用户一个
+ *    空壳。这是少见的「按引擎判断」合理场合：差别就在实现有没有做。
+ */
+export function supportsCheapGlass(): boolean {
+  if (typeof window === "undefined") return false;
+  if (/firefox|fxios/i.test(window.navigator.userAgent)) return false;
+  if (typeof CSS === "undefined" || typeof CSS.supports !== "function") return false;
+  return (
+    CSS.supports("backdrop-filter", "blur(1px)") &&
+    CSS.supports("backdrop-filter", 'url("#lab-glass-probe")')
+  );
+}
+
 /** 单张位图的像素预算（超长面板按比例缩图） */
 const MAX_MAP_PIXELS = 240_000;
 
@@ -34,12 +59,20 @@ const BEZEL_MIN = 12;
 const BEZEL_MAX = 90;
 
 /**
- * 折射强度：最大位移相对环带宽度的比例。
+ * 折射强度：最大位移相对环带宽度的比例，按面板大小分两档。
  *
- * 调低过一次——0.6 时边缘能把背景拉开半个环带那么远，看着像贴了层放大镜；
- * 现在这个值只在边缘留一点「玻璃有厚度」的暗示。
+ * 大面板（正文那种，动辄上千像素）用 0.35：再大边缘那道压缩会宽到像贴了层
+ * 放大镜，而且那么长的边根本看不过来。
+ *
+ * 小面板（卡片、按钮那类）用 0.6：它整块就几百像素，同样的**绝对**位移在视觉
+ * 上弱得多——0.35 配 12px 环带只有 4.2px 位移，几乎看不出边缘压缩，和 WebGL
+ * 那套摆在一起会显平。调高这一档就是为了补上这个差距。
  */
-const AMOUNT_RATIO = 0.35;
+const AMOUNT_RATIO_LARGE = 0.35;
+const AMOUNT_RATIO_SMALL = 0.6;
+
+/** 短边小于这个尺寸算「小面板」，用上面那个更高的折射强度 */
+const SMALL_PANEL_SIDE = 240;
 
 const cache = new Map<string, { url: string; scale: number }>();
 
@@ -89,7 +122,9 @@ export function cheapGlassMap(
 
   const shortSide = Math.max(1, Math.min(width, height));
   const bezel = Math.max(BEZEL_MIN, Math.min(BEZEL_MAX, shortSide * BEZEL_RATIO));
-  const amount = bezel * AMOUNT_RATIO;
+  const amountRatio =
+    shortSide < SMALL_PANEL_SIDE ? AMOUNT_RATIO_SMALL : AMOUNT_RATIO_LARGE;
+  const amount = bezel * amountRatio;
 
   // 位图尺寸：按预算缩，再压长边上限
   let mapScale = Math.min(1, Math.sqrt(MAX_MAP_PIXELS / (width * height)));

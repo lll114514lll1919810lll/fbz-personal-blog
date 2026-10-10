@@ -2416,6 +2416,38 @@ html {
   border-color: transparent;
 }
 
+/*
+  便宜版（SVG 滤镜那条路）把上下两道手工高光拔亮一档。
+
+  画布那套会在玻璃边缘画一圈高光，便宜版没有——它只剩 CSS 这里手工描的两条线。
+  同样一档透明度，放在深色底上便宜版会明显发闷，像块塑料片。
+
+  上下各给一个值，不复用 --panel-highlight：那条在深色主题下是 0.06，
+  想调亮得再掺白，而下高光只有它的一半，掺白的比例要另算一道——一个数拆成
+  两个反而更绕。这里直接写死两个变量，按主题各一套，要调就调这两个数。
+  用白色是因为 --panel-highlight 在两个主题下本来都是白色。
+  选择器必须和上面那条同样具体：只写属性会输给上面的类选择器。
+*/
+:root[data-lab-liquidglass="on"] {
+  --lab-glass-line-top: rgb(255 255 255 / 0.85);
+  --lab-glass-line-bottom: rgb(255 255 255 / 0.45);
+}
+
+:root[data-lab-liquidglass="on"][data-theme="dark"] {
+  /* 深色主题原来那条只有 0.06，便宜版提到 0.13 才和画布那圈高光看得齐 */
+  --lab-glass-line-top: rgb(255 255 255 / 0.13);
+  --lab-glass-line-bottom: rgb(255 255 255 / 0.07);
+}
+
+:root[data-lab-liquidglass="on"] .panel[data-lab-glass-cheap="on"],
+:root[data-lab-liquidglass="on"] .panel-strong[data-lab-glass-cheap="on"],
+:root[data-lab-liquidglass="on"] .panel-raised[data-lab-glass-cheap="on"] {
+  box-shadow:
+    inset 0 1px 0 var(--lab-glass-line-top),
+    inset 0 -1px 0 var(--lab-glass-line-bottom),
+    var(--panel-shadow);
+}
+
 :root[data-lab-liquidglass="on"][data-theme="dark"] .panel[data-lab-glass-panel="on"],
 :root[data-lab-liquidglass="on"][data-theme="dark"] .panel-strong[data-lab-glass-panel="on"],
 :root[data-lab-liquidglass="on"][data-theme="dark"] .panel-raised[data-lab-glass-panel="on"] {

@@ -21,7 +21,13 @@ import type { LabRuntimeId } from "@/lib/labs";
  * 每次返回新对象会让它认为变了，进而无限重渲染。
  */
 
-export type LabRuntimeStatus = "idle" | "loading" | "ready" | "failed";
+export type LabRuntimeStatus =
+  | "idle"
+  | "loading"
+  | "ready"
+  /** 跑起来了，但降级了：某个浏览器不支持的分支被跳过（见 lab-liquidglass.tsx） */
+  | "degraded"
+  | "failed";
 
 const statuses = new Map<LabRuntimeId, LabRuntimeStatus>();
 const listeners = new Set<() => void>();

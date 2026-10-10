@@ -150,6 +150,10 @@ const RUNTIME_NOTES: Record<
   idle: null,
   loading: { text: "正在准备：下载渲染代码、初始化 WebGL…", className: "text-muted" },
   ready: { text: "已生效。", className: "text-secondary" },
+  degraded: {
+    text: "已生效，但有一处降级：这个浏览器不支持 SVG 滤镜版的玻璃（Firefox 不支持 backdrop-filter 里的 url()），超长正文与文章里的卡片已退回原本的亚克力外观，其余面板仍是 WebGL 玻璃。",
+    className: "text-[var(--gold)]",
+  },
   failed: {
     text: "初始化失败，外观没有改变：当前浏览器可能不支持 WebGL。",
     className: "text-[var(--gold)]",

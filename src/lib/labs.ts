@@ -156,7 +156,7 @@ export const LABS: readonly Lab[] = [
     warning:
       "还在试的效果：玻璃跟不上滚动和动画（会滞后一两帧）、超长正文用的是另一种便宜实现、老设备上会掉帧。不保证体验和性能，不合适就关掉。",
     caveat:
-      "渲染器和 shader 来自 liquid-glass-webgl（AGPL-3.0），超长文章的面板另走一条便宜的 SVG 滤镜路线（来自 shuding/liquid-glass，MIT）。开启后整页背景交给画布绘制，面板文字仍是可选中、可搜索的真实 DOM；顶栏底栏、以及超过 24 块的其余面板保持原本的亚克力外观。",
+      "渲染器和 shader 来自 liquid-glass-webgl（AGPL-3.0），超长文章的面板另走一条便宜的 SVG 滤镜路线（来自 shuding/liquid-glass，MIT）。开启后整页背景交给画布绘制，面板文字仍是可选中、可搜索的真实 DOM；顶栏底栏、以及超过 24 块的其余面板保持原本的亚克力外观。便宜那条路线依赖 backdrop-filter 里的 SVG 滤镜，目前只有 Chromium 内核支持：Firefox 下正文与文章里的卡片会退回亚克力外观，开启后那一行会写明。",
   },
   {
     kind: "choice",

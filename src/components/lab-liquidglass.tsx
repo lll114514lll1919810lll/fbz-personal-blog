@@ -6,7 +6,10 @@ import {
   type GlassElementConfig,
 } from "@/components/liquid-glass/renderer";
 import { setLabRuntimeStatus } from "@/lib/lab-runtime-status";
-import { cheapGlassMap } from "@/lib/liquid-glass-cheap";
+import {
+  cheapGlassMap,
+  supportsCheapGlass,
+} from "@/lib/liquid-glass-cheap";
 import {
   currentGlassTheme,
   getGlassParams,
@@ -77,7 +80,19 @@ type CheapFilter = {
 };
 
 /** 面板上的标记：CSS 靠它把面板底转透明 */
+/** 会被当作玻璃候选的面板。三处（量元素、逐帧预检、嵌套判断）共用一份 */
+const PANEL_SELECTOR = ".panel, .panel-strong, .panel-raised";
+
 const PANEL_ATTR = "data-lab-glass-panel";
+
+/**
+ * 走便宜版的面板上的标记。
+ *
+ * 和 PANEL_ATTR 分开，是因为两套玻璃的**边缘高光来源不同**：画布那套会在
+ * 边缘画一圈高光，便宜版只有 CSS 里手工描的上下两道线。样式表靠这个标记
+ * 把便宜版那两道线拔亮一档，否则同样在深色底上，便宜版会明显发闷。
+ */
+const CHEAP_ATTR = "data-lab-glass-cheap";
 
 /** 根元素上的标记：CSS 靠它把 body 的 CSS 背景图收起来（渲染器已经画了一份） */
 const CANVAS_ATTR = "data-lab-glass-canvas";
@@ -86,17 +101,16 @@ const CANVAS_ATTR = "data-lab-glass-canvas";
 const MAX_PANELS = 24;
 
 /**
- * 两个方向都小于这个尺寸的面板不上玻璃（只看短边是不够的）。
+ * 短边小于这个尺寸的面板不上玻璃。
  *
- * 不只是「看不清」的问题。玻璃模式会把面板那层薄纱压到两成透明（大面板上
- * 是对的——折射由画布负责），但小控件的背后往往就是一块深色背景，
- * **没有东西可折射**，画布画出来只剩一圈边缘高光。实测 44px 的回到顶部
- * 按钮：开玻璃后从「实心圆钮」变成了「空心圆环」。
+ * 门槛定得很低，只用来滤掉那些根本画不出内容的碎块（分隔条、装饰线之类）。
  *
- * 判据是「两个方向都小」而不是「短边小」：标签页那种 473×60 的横条短边
- * 也很小，但它的长边上有实实在在的边缘可以折射，该给玻璃。
+ * 曾经为 44px 的回到顶部按钮把它提到 64，想让那个圆钮保留亚克力外观——
+ * 那是误读了反馈（当时说的是「按钮在文章顶端不该出现」，属于出现时机，
+ * 不是外观）。小控件还是走 WebGL 那套：它比一层纯模糊多出边缘压缩和倒角
+ * 高光，圆钮上正好看得出来。
  */
-const MIN_SIDE = 64;
+const MIN_SIDE = 24;
 
 /**
  * 圆角在遮罩纹理里至少要有这么多像素，否则这块面板改走便宜版。
@@ -217,10 +231,23 @@ function panelToElement(
   params: GlassParams,
 ): GlassElementConfig | null {
   const rect = panel.getBoundingClientRect();
-  // 两个方向都小才算「小控件」：见 MIN_SIDE 的说明
-  if (rect.width < MIN_SIDE && rect.height < MIN_SIDE) return null;
+  if (rect.width < MIN_SIDE || rect.height < MIN_SIDE) return null;
 
   const style = getComputedStyle(panel);
+
+  /*
+    隐藏中的面板不上玻璃。
+
+    画布上的玻璃是**独立的一层**，不跟着 DOM 的 opacity 走——回到顶部按钮淡出
+    之后，它那圈玻璃还留在画布上，看起来就是「按钮该消失了却还看得见一轮边框」。
+    这正是当初误判成「边框没隐藏」的那件事：根因在画布，不在 border。
+
+    门槛取 0.5，不是 1：canvas 设法让玻璃跟着淡入淡出，只能在淡到一半时切换。
+    取 1 的话，按钮会先以一层几乎透明的空壳出现，再「啪」地套上玻璃，更难看。
+    好在按钮显隐时同时带着 8px 位移，几何预检每帧量得到，所以切换不会漏。
+  */
+  if (Number.parseFloat(style.opacity) < 0.5) return null;
+
   const radius = Math.min(
     parseFloat(style.borderTopLeftRadius) || 0,
     Math.min(rect.width, rect.height) / 2,
@@ -317,6 +344,33 @@ function panelToElement(
 }
 
 /**
+ * 这块面板**只能**走便宜版，不能交给 WebGL。两种情况：
+ *
+ * 1. **正文页的正文面板**（`<article class="panel panel-strong">`）。它可能高到
+ *    上万像素，WebGL 那套几何是按元素归一化算的，尺寸一大就退化（圆角变方、
+ *    甚至整块画成三角形，见 MIN_RADIUS_TEXELS）。正文面板一律用便宜版，
+ *    这一整类问题就不存在了。
+ *
+ * 2. **嵌在另一块玻璃面板里面的面板**：文章末尾的上一篇/下一篇、评论区的每条
+ *    留言。全局画布在最底层（`position: fixed; z-index: -1`），DOM 里的一切都
+ *    压在它上面——包括父面板自己那层薄纱。所以走 WebGL 的话，这些卡片的玻璃
+ *    会被父面板压住：实测同一个位置，父面板薄纱在时卡片内部平均亮度 33.2，
+ *    去掉后 44.1，被压掉约 25%。便宜版是一条 DOM 的 backdrop-filter，天然画在
+ *    父面板之上，层级才对。代价是折射比 WebGL 糙，靠调高小尺寸面板的折射
+ *    强度补（见 liquid-glass-cheap.ts 的 AMOUNT_RATIO_SMALL）。
+ */
+function mustUseCheap(panel: HTMLElement): boolean {
+  /*
+    正文那条判据要同时看标签和类名：评论区里每条留言也是 `<article>`，只是用
+    的是 `panel-raised`，光看标签会把它们一起打进「正文」。
+  */
+  if (panel.tagName === "ARTICLE" && panel.classList.contains("panel-strong")) {
+    return true;
+  }
+  return !!panel.parentElement?.closest(PANEL_SELECTOR);
+}
+
+/**
  * 这块面板要不要走便宜版。
  *
  * 只有一种情况需要：尺寸正常、可圆角，但圆角在 WebGL 那套的遮罩纹理里会
@@ -327,15 +381,17 @@ function cheapFallbackFor(
   panel: HTMLElement,
   index: number,
   params: GlassParams,
+  /** 无视「圆角是否退化」，直接走便宜版（见 mustUseCheap） */
+  force = false,
 ): CheapFilter | null {
   const rect = panel.getBoundingClientRect();
-  // 两个方向都小才算「小控件」：见 MIN_SIDE 的说明
-  if (rect.width < MIN_SIDE && rect.height < MIN_SIDE) return null;
+  if (rect.width < MIN_SIDE || rect.height < MIN_SIDE) return null;
 
   // 站点外框不给便宜版，理由同 panelToElement
   if (!panel.closest("main")) return null;
 
   const style = getComputedStyle(panel);
+
   const position = style.position;
   if (position === "sticky" || position === "fixed") return null;
 
@@ -344,10 +400,12 @@ function cheapFallbackFor(
     Math.min(rect.width, rect.height) / 2,
   );
   if (radius <= 0) return null;
-  // 只有「可圆角但在遮罩里退化」的才走这条；正常的交给 WebGL
-  const dpr = window.devicePixelRatio || 1;
-  if (radiusTexels(rect.width, rect.height, radius, dpr) >= MIN_RADIUS_TEXELS) {
-    return null;
+  // 常规情况只有「可圆角但在遮罩里退化」的才走这条；强制时不再看这个
+  if (!force) {
+    const dpr = window.devicePixelRatio || 1;
+    if (radiusTexels(rect.width, rect.height, radius, dpr) >= MIN_RADIUS_TEXELS) {
+      return null;
+    }
   }
 
   const map = cheapGlassMap(rect.width, rect.height, radius);
@@ -395,6 +453,8 @@ export function LiquidGlassPanels() {
 
     let disposed = false;
     let panels: HTMLElement[] = [];
+    /** 这台浏览器支不支持便宜版（SVG 滤镜那条路）。整轮只算一次 */
+    const cheapSupported = supportsCheapGlass();
     /**
      * 已经挂上便宜版滤镜的面板（含它们原本的 backdrop-filter），清理时还原。
      *
@@ -417,6 +477,7 @@ export function LiquidGlassPanels() {
     ) => {
       for (const { panel, previous } of appliedCheap) {
         panel.style.backdropFilter = previous;
+        panel.removeAttribute(CHEAP_ATTR);
       }
       appliedCheap = [];
 
@@ -424,6 +485,7 @@ export function LiquidGlassPanels() {
         const filter = filters.find((item) => item.id === id);
         if (!filter) continue;
         appliedCheap.push({ panel, previous: panel.style.backdropFilter });
+        panel.setAttribute(CHEAP_ATTR, "on");
         panel.style.backdropFilter = [
           `url(#${filter.id})`,
           `blur(${filter.blur}px)`,
@@ -450,28 +512,27 @@ export function LiquidGlassPanels() {
     */
     let lastSignature = "";
 
-    /**
-     * 上次**真正提交**给渲染器的矩形（按元素 id）。
-     *
-     * 大块头的更新会被限流，这时保留它的旧矩形——渲染器的 setElements 是增量的，
-     * 矩形没变就不会重新光栅化，于是「大块头先不动、小块头照常跟」。
-     */
-
     /** 按当前 DOM 量一批面板，交给渲染器 */
     const buildElements = () => {
       const found = [
         ...document.querySelectorAll<HTMLElement>(
-          ".panel, .panel-strong, .panel-raised",
+          PANEL_SELECTOR,
         ),
       ];
 
       const elements: GlassElementConfig[] = [];
       const nextPanels: HTMLElement[] = [];
       const cheap: CheapFilter[] = [];
+      /** 有面板本该走便宜版、而这个浏览器不支持（Firefox），于是少了一层玻璃 */
+      let degraded = false;
       const cheapPanels: { id: string; panel: HTMLElement }[] = [];
       const signatureParts: string[] = [];
       for (const panel of found) {
-        const element = panelToElement(panel, elements.length, params);
+        // 只能走便宜版的（正文、嵌套面板）不必再问 WebGL 那套
+        const forceCheap = mustUseCheap(panel);
+        const element = forceCheap
+          ? null
+          : panelToElement(panel, elements.length, params);
         if (element) {
           if (elements.length >= MAX_PANELS) break;
           elements.push(element);
@@ -483,11 +544,27 @@ export function LiquidGlassPanels() {
         }
 
         /*
-          没通过 WebGL 那套、但尺寸正常的（超长正文面板），改用便宜版：
-          不用 WebGL，一条 backdrop-filter 交给合成器。它省得不只是算力——
-          也省掉一个可能撑爆纹理上限的超长元素。
+          便宜版靠 backdrop-filter 里的 SVG 滤镜，Firefox 不支持（见
+          supportsCheapGlass）。这种情况下不给它上便宜版：面板会退回原本的
+          亚克力外观，看起来还是一块正常的板子，总好过只剩一层两成透明的空壳。
+          同时记一笔降级，实验室那边会把原因说给用户听。
         */
-        const fallback = cheapFallbackFor(panel, cheap.length, params);
+        if (!cheapSupported) {
+          if (forceCheap) degraded = true;
+          continue;
+        }
+
+        /*
+          走便宜版：不用 WebGL，一条 backdrop-filter 交给合成器。
+          三种来路：正文面板、嵌在玻璃里的面板（都是 mustUseCheap 判定的），
+          以及圆角在遮罩纹理里退化到没法用的超长面板。
+        */
+        const fallback = cheapFallbackFor(
+          panel,
+          cheap.length,
+          params,
+          forceCheap,
+        );
         if (!fallback) continue;
         cheap.push(fallback);
         cheapPanels.push({ id: fallback.id, panel });
@@ -500,6 +577,18 @@ export function LiquidGlassPanels() {
       if (signature === lastSignature) return;
       lastSignature = signature;
 
+      /*
+        上一轮上了玻璃、这一轮没上的面板，标记要摘掉。
+
+        以前只加不摘：回到顶部按钮淡出后不再进列表，标记却留着，CSS 那边
+        仍旧按「玻璃面板」处理（底转透明、边框清掉），看上去就是一层空壳；
+        画布上也还留着上一帧的玻璃。
+      */
+      const nextPanelSet = new Set(nextPanels);
+      for (const panel of panels) {
+        if (!nextPanelSet.has(panel)) panel.removeAttribute(PANEL_ATTR);
+      }
+
       panels = nextPanels;
       applyCheapFilters(cheapPanels, cheap);
       setCheapFilters(cheap);
@@ -511,7 +600,17 @@ export function LiquidGlassPanels() {
       // 面板就保持原本的亚克力外观（画布上也只剩壁纸）
       const on = elements.length > 0 || cheap.length > 0;
       for (const panel of panels) panel.setAttribute(PANEL_ATTR, "on");
-      setLabRuntimeStatus("liquidglass", on ? "ready" : "failed");
+      /*
+        降级是「这台浏览器的能力」问题，不是「当前页面」的问题：便宜版在
+        Firefox 上根本不生效，而文章页一定会用到它。所以只要浏览器不支持，
+        这个实验整体就是降级状态——否则用户在 /lab 上看不到任何说明
+        （那一页没有正文面板，degraded 永远不会被置位），到了文章页才发现
+        正文没了玻璃，却不知道原因。
+      */
+      setLabRuntimeStatus(
+        "liquidglass",
+        on ? (degraded || !cheapSupported ? "degraded" : "ready") : "failed",
+      );
     };
 
     const syncSize = () => {
@@ -827,6 +926,7 @@ export function LiquidGlassPanels() {
       clearTimeout(resizeTimer);
       for (const { panel, previous } of appliedCheap) {
         panel.style.backdropFilter = previous;
+        panel.removeAttribute(CHEAP_ATTR);
       }
       for (const panel of panels) panel.removeAttribute(PANEL_ATTR);
       root.removeAttribute(CANVAS_ATTR);
