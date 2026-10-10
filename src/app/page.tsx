@@ -6,7 +6,8 @@ import { siteConfig } from "@/lib/site";
 export default function HomePage() {
   const posts = getAllPosts();
   const featured = posts[0];
-  const latest = posts.slice(1, 5);
+  // 5 篇 + 「查看全部」入口正好填满 3 列的两行：4 篇时网格右下角空一格
+  const latest = posts.slice(1, 6);
   const totalWords = posts.reduce((sum, p) => sum + (p.readingTime ?? 0), 0);
   const tags = [...new Set(posts.flatMap((post) => post.tags ?? []))].slice(0, 5);
 
