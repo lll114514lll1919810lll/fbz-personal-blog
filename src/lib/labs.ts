@@ -152,17 +152,17 @@ export const LABS: readonly Lab[] = [
     runtime: "liquidglass",
     label: "液态玻璃",
     description:
-      "面板换成一块真玻璃：WebGL 实时折射背后的背景，边缘压缩、倒角高光，G2 连续曲率圆角。",
+      "面板换成一块真“玻璃”，iOS风格：实时折射背后的背景，边缘压缩、倒角高光，G2 连续曲率圆角。依赖 WebGL 。",
     warning:
-      "还在试的效果：玻璃跟不上滚动和动画（会滞后一两帧）、超长正文用的是另一种便宜实现、老设备上会掉帧。不保证体验和性能，不合适就关掉。",
+      "实验性效果：玻璃可能跟不上滚动和动画（会滞后一两帧）、超长正文面板效果较差、文字与背景的对比度可能会降低、在老设备上会掉帧。不合适就关掉。",
     caveat:
-      "渲染器和 shader 来自 liquid-glass-webgl（AGPL-3.0），超长文章的面板另走一条便宜的 SVG 滤镜路线（来自 shuding/liquid-glass，MIT）。开启后整页背景交给画布绘制，面板文字仍是可选中、可搜索的真实 DOM；顶栏底栏、以及超过 24 块的其余面板保持原本的亚克力外观。便宜那条路线依赖 backdrop-filter 里的 SVG 滤镜，目前只有 Chromium 内核支持：Firefox 下正文与文章里的卡片会退回亚克力外观，开启后那一行会写明。",
+      "超长文章的面板另走一条便宜的 SVG 滤镜路线。开启后整页背景交给画布绘制；顶栏底栏、以及超过 24 块的其余面板保持原本的亚克力外观。该路线依赖 backdrop-filter 里的 SVG 滤镜，Firefox 下正文与文章里的卡片会退回亚克力外观。",
   },
   {
     kind: "choice",
     id: "corners",
     label: "圆角",
-    description: "面板和控件的圆角分三档：默认、直角、圆润。",
+    description: "面板和控件的圆角，分三档。不保证覆盖所有控件；“液态玻璃”实验下切换圆角需要刷新页面生效。",
     options: [
       { value: "", label: "默认" },
       { value: "square", label: "直角" },

@@ -35,15 +35,16 @@ export function LabPanel() {
       <div className="panel flex flex-col gap-5 px-5 py-5 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-secondary">
-            {activeCount > 0 ? `正在测试 ${activeCount} 项` : "当前都是默认外观"}
+            {activeCount > 0 ? `外观实验：正在测试 ${activeCount} 项外观` : "外观实验：当前都是默认外观"}
           </p>
-          {/* 全关按钮只在真的改过的时候出现：默认状态下摆一个按不动的按钮
-              只会让人以为是坏的 */}
-          {activeCount > 0 && (
-            <button type="button" onClick={clear} className="btn-pill">
-              全部恢复默认
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={clear}
+            disabled={activeCount === 0}
+            className="btn-pill"
+          >
+            全部恢复默认
+          </button>
         </div>
 
         {groupIntoSections(LABS).map((section) => {
@@ -90,7 +91,7 @@ export function LabPanel() {
         风险说明放在控件下方而不是顶部横幅：读者先看到能做什么，再看到边界。
       */}
       <section className="panel flex flex-col gap-3 px-5 py-5 sm:px-6">
-        <h2 className="text-sm font-medium">关于这些开关</h2>
+        <h2 className="text-sm font-medium">关于外观选项</h2>
         <ul className="flex flex-col gap-2 text-sm leading-relaxed text-secondary">
           {NOTES.map((note) => (
             <li key={note} className="flex gap-2">

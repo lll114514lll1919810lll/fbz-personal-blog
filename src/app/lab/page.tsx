@@ -22,7 +22,7 @@ export default function LabPage() {
         <p className="eyebrow">LAB</p>
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">实验室</h1>
         <p className="max-w-xl text-base leading-relaxed text-secondary">
-          这里放一些还没定稿的外观想法，开关就在下面。都是实验，随时可能改或取消。
+          这里放一些还没定稿的想法，不止外观，开关就在下面。还会有更多的实验功能，随时可能修改或取消。
         </p>
       </header>
 

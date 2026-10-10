@@ -211,7 +211,8 @@ async function loadScrimmedWallpaper(url: string): Promise<string> {
  * 把一块面板翻译成渲染器的玻璃元素；不该上玻璃的返回 null。
  *
  * 圆角取面板自己的计算值：本站在「圆角」实验里能把 --radius-panel 改成
- * 0 或 26，玻璃必须跟着走，否则四角会露出来或盖住面板的边。
+ * 0 或 26，玻璃必须跟着走，否则四角会露出来或盖住面板的边。半径为 0
+ * 时仍然走矩形滤镜，保证「直角」实验下正文玻璃不退回亚克力。
  */
 /**
  * 面板是否跟随文档流。buildElements 里量过就缓存下来，
@@ -394,8 +395,10 @@ function mustUseCheap(panel: HTMLElement): boolean {
 /**
  * 这块面板要不要走便宜版。
  *
- * 只有一种情况需要：尺寸正常、可圆角，但圆角在 WebGL 那套的遮罩纹理里会
- * 退化成直角——也就是超长正文面板（条件见 radiusTexels 的说明）。
+ * 只有两种情况需要：正文或嵌套面板必须避开 WebGL，或者圆角在 WebGL
+ * 那套的遮罩纹理里会退化成直角——也就是超长正文面板（条件见
+ * radiusTexels 的说明）。直角实验下正文仍然使用这条 SVG 滤镜路径，
+ * 只是位移图本身按矩形生成。
  * 顶栏底栏、吸顶/固定、太小的面板都不在列。
  */
 function cheapFallbackFor(
@@ -420,7 +423,6 @@ function cheapFallbackFor(
     parseFloat(style.borderTopLeftRadius) || 0,
     Math.min(rect.width, rect.height) / 2,
   );
-  if (radius <= 0) return null;
   // 常规情况只有「可圆角但在遮罩里退化」的才走这条；强制时不再看这个
   if (!force) {
     const dpr = window.devicePixelRatio || 1;
