@@ -117,7 +117,14 @@ jobs:
           post_count=0
           for d in out/blog/*/; do
             [ -d "$d" ] || continue
-            case "$d" in */__next*) continue ;; esac
+            case "$d" in
+              */__next*) continue ;; # Next 内部 RSC 产物目录
+              # 这两个是 /blog 下的嵌套路由，不是文章详情页：它们的
+              # index.html 在更深一层（archive/[month]/、page/[n]/），
+              # 直接检查当前层会误报「缺少 index.html」。
+              */archive/) continue ;;
+              */page/)    continue ;;
+            esac
             [ -f "$d/index.html" ] \
               || fail "文章页缺少 index.html（trailingSlash 可能失效）：$d"
             post_count=$((post_count + 1))
