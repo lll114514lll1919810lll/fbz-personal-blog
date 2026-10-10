@@ -1690,6 +1690,14 @@ html {
 }
 
 .code-block pre code {
+  /* 纯文本块（没写语言标记）拿不到 rehype-pretty-code 写的内联
+     display:grid，code 退回 inline。inline 流的行盒 strut 用的是外层
+     pre 的字号（继承 .prose 的 1.0625rem），而不是 code 自己的
+     0.855rem——每行行高比行号层高约 0.35rem，行号越往下错得越多。
+     display:block 让它建立自己的格式化上下文，strut 回到 code 的字号，
+     纯文本块的行高与有语言的块、与行号层重新一致。
+     有语言的块 code 上有内联 display:grid，优先级更高，不受影响。 */
+  display: block;
   /* rehype-pretty-code 会给 <code> 写 display:grid。
      它默认按 block 的宽度行为走：宽度等于容器内容宽度，超长行走的是
      「子元素溢出」。而滚动容器的可滚动溢出区由子元素溢出撑出来，会绕开
@@ -1701,7 +1709,7 @@ html {
      才真正变成滚动末尾的右边距。 */
   width: max-content;
   min-width: 100%;
-  /* display:grid 是内联样式写的，这里不用重复声明 */
+  /* display:grid 只由 rehype-pretty-code 的内联样式写，这里不重复声明 */
 }
 
 /* 行号槽位。

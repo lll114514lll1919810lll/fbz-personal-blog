@@ -83,7 +83,7 @@ export function SiteFooter() {
           <p>
             © {new Date().getFullYear()} {siteConfig.author}
           </p>
-          <p>风不止，但行有恒。</p>
+          <p>Powered by FlowyBlog Framework</p>
         </div>
 
         {/* 授权声明放在页脚而不是关于页：转载的人通常只翻到这个站最底部，
