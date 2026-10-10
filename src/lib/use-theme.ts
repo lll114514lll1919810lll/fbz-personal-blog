@@ -185,15 +185,20 @@ export function toggleTheme(origin?: { x: number; y: number }) {
   const transition = doc.startViewTransition(once);
   const fallback = setTimeout(once, 120);
 
-  transition.finished.finally(() => {
-    clearTimeout(fallback);
-    once();
+  // 过渡途中文档被隐藏（点完立刻切走标签页）时浏览器会中止过渡，
+  // finished 随之 reject——这不是错误，接住它，否则控制台会报 uncaught。
+  // .catch 后再 .finally，清理逻辑两种结局都要跑。
+  transition.finished
+    .catch(() => {})
+    .finally(() => {
+      clearTimeout(fallback);
+      once();
 
-    root.style.removeProperty("--theme-x");
-    root.style.removeProperty("--theme-y");
-    root.style.removeProperty("--theme-r");
-    if (page) page.style.viewTransitionName = savedName;
-  });
+      root.style.removeProperty("--theme-x");
+      root.style.removeProperty("--theme-y");
+      root.style.removeProperty("--theme-r");
+      if (page) page.style.viewTransitionName = savedName;
+    });
 }
 
 export function useTheme() {
