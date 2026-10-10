@@ -21,7 +21,14 @@
  * 全部关掉之后站点必须回到和没装过实验室时一模一样的样子。
  */
 
-export type LabId = "flat" | "outline" | "typewriter" | "liquidglass" | "corners";
+export type LabId =
+  | "flat"
+  | "outline"
+  | "typewriter"
+  | "book"
+  | "cyberpunk"
+  | "liquidglass"
+  | "corners";
 
 /**
  * 互斥组的 id。
@@ -30,13 +37,23 @@ export type LabId = "flat" | "outline" | "typewriter" | "liquidglass" | "corners
  * （比如「实底」和「描边」都要决定面板底色长什么样），同时开着
  * 只能靠 CSS 的先后顺序分胜负，结果既不可预期也说不清。
  * 所以互斥不是交互上的约束，而是「这组实验本来就回答同一个问题」。
+ *
+ * 两组回答的是不同的问题，因此跨组可以自由组合：
+ *   material —— 外观材质：底色、强调色、字体这类「整体长相」（实底、
+ *               描边、书本、赛博朋克）；
+ *   surface  —— 面板材质：面板表面是什么（亚克力 / 玻璃），只看
+ *               背景图和令牌结构，跟整体长相是两件事。
  */
-export type LabGroupId = "material";
+export type LabGroupId = "material" | "surface";
 
 export const LAB_GROUPS: Record<LabGroupId, { label: string; hint: string }> = {
   material: {
-    label: "面板材质",
+    label: "外观材质",
     hint: "同一组里只能开一个：再开另一个，前一个会自动关掉。",
+  },
+  surface: {
+    label: "面板材质",
+    hint: "与上面的外观材质互不相干，可以自由组合。",
   },
 };
 
@@ -140,15 +157,26 @@ export const LABS: readonly Lab[] = [
   },
   {
     kind: "switch",
-    id: "typewriter",
-    label: "打字机",
-    description: "全站换成等宽字体，正文行距收紧一点。",
-    caveat: "中文会回退到系统中文字体，主要变化在数字和拉丁字母上。",
+    id: "book",
+    group: "material",
+    label: "书本",
+    description:
+      "去掉背景图：浅色换成米黄纸面、深色换成深灰纸面，全站改用宋体和 Times New Roman，代码块保持等宽。",
+    caveat:
+      "中文宋体用的是系统自带字体（Windows 是中易宋体、macOS 是宋体-简），小字号会显得偏细；与「液态玻璃」同开时，玻璃没有背景图可折射，不会生效。",
+  },
+  {
+    kind: "switch",
+    id: "cyberpunk",
+    group: "material",
+    label: "赛博朋克",
+    description:
+      "深蓝黑底、霓虹青强调色、面板描边带一点青光。锁定夜间模式：主题开关在这条实验开着时不生效，关掉实验即恢复。",
   },
   {
     kind: "switch",
     id: "liquidglass",
-    group: "material",
+    group: "surface",
     runtime: "liquidglass",
     label: "液态玻璃",
     description:
@@ -157,6 +185,13 @@ export const LABS: readonly Lab[] = [
       "实验性效果：玻璃可能跟不上滚动和动画（会滞后一两帧）、超长正文面板效果较差、文字与背景的对比度可能会降低、在老设备上会掉帧。不合适就关掉。",
     caveat:
       "超长文章的面板另走一条便宜的 SVG 滤镜路线。开启后整页背景交给画布绘制；顶栏底栏、以及超过 24 块的其余面板保持原本的亚克力外观。该路线依赖 backdrop-filter 里的 SVG 滤镜，Firefox 下正文与文章里的卡片会退回亚克力外观。",
+  },
+  {
+    kind: "switch",
+    id: "typewriter",
+    label: "打字机",
+    description: "全站换成等宽字体，正文行距收紧一点。",
+    caveat: "中文会回退到系统中文字体，主要变化在数字和拉丁字母上。",
   },
   {
     kind: "choice",

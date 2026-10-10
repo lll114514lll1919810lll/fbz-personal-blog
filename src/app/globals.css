@@ -2406,11 +2406,15 @@ html {
    :root[data-lab-<id>="<值>"] 的覆盖规则。其它文件都不用动。
    ========================================================================= */
 
-/* --- 互斥组「面板材质」 ---------------------------------------------------
-   两个实验回答的是同一个问题（面板表面长什么样），所以同组只能开一个。
+/* --- 互斥组「外观材质」 ---------------------------------------------------
+   组里的实验回答的是同一个问题（整站长什么样：底色、强调色、字体），
+   所以同组只能开一个：实底、描边、书本、赛博朋克。
+   液态玻璃不在这组——它回答的是「面板表面是什么」（亚克力 / 玻璃），
+   单独立在「面板材质」组，可以和上面任何一项组合（玻璃折射背景图，
+   有背景图才生效，所以配上「书本」时它自己不会生效）。
    互斥由 lib/labs.ts 的 setLab 统一处理，这里不用写任何「谁和谁冲突」的规则。
 
-   两者都只改令牌，不去逐个组件写覆盖——面板的观感本来就全部由这几个令牌
+   成员都只改令牌，不去逐个组件写覆盖——面板的观感本来就全部由这几个令牌
    驱动，改令牌等于一次性改掉全站所有面板，也不会漏掉某个角落。
 
    注意 --panel-shadow 不能写成 none：.panel 里是
@@ -2488,6 +2492,164 @@ html {
 :root[data-lab-typewriter="on"] .prose {
   font-size: 1rem;
   line-height: 1.75;
+}
+
+/* --- 书本 -----------------------------------------------------------------
+   去掉背景图，整站回到「纸面」：浅色是米黄纸、深色是深灰纸；
+   字体换成衬线——西文 Times New Roman、中文宋体，代码块除外：
+   pre/code 的等宽字体来自浏览器默认样式和 Tailwind preflight，
+   不走根元素的 font-family，所以只改根字体栈就伤不到代码。
+
+   面板同时从「亚克力」换成「纸页」：不透明、无高光、无模糊。
+   阴影不写成 none（原因见上面「面板材质」的注释），而是压到很轻，
+   像一叠纸边缘的那种浮起。颜色都往暖里调了一点，纸面才不发灰。
+
+   主题的分法和上面那两份深色令牌块相同：跟随系统用媒体查询，
+   手动选择用属性选择器，各写一份。浅色那份还得挡住「系统深色 +
+   书本开着」的情况——媒体查询只认 light 才落纸色。 */
+:root[data-lab-book="on"] {
+  --bg-image: none;
+  --bg-scrim: none;
+  /* 纯色纸面上文字描边只会发糊，关掉（默认那套描边是给背景图用的） */
+  --text-outline: none;
+  --panel-highlight: transparent;
+  --panel-blur: 0px;
+  --panel-saturate: 100%;
+  font-family:
+    "Times New Roman", "Songti SC", SimSun, "NSimSun", "Noto Serif CJK SC",
+    "Source Han Serif SC", serif;
+}
+
+/* 浅色：米黄纸 + 墨色字 */
+@media (prefers-color-scheme: light) {
+  :root[data-lab-book="on"] {
+    --background: #f6f0e1;
+    --surface: #ede4cf;
+    --foreground: #29261f;
+    --secondary: #5c574b;
+    --muted: #6f6a5d;
+    --border: #ddd3bd;
+    --panel-bg: #fbf7ec;
+    --panel-bg-strong: #fdfaf2;
+    --panel-bg-raised: #f2ecdc;
+    --panel-border: rgb(66 56 38 / 0.16);
+    --panel-shadow:
+      0 1px 2px rgb(66 56 38 / 0.05), 0 8px 24px -14px rgb(66 56 38 / 0.16);
+  }
+}
+
+/* 手动选了浅色主题：上面的媒体查询不命中，单独补一份 */
+:root[data-lab-book="on"][data-theme="light"] {
+  --background: #f6f0e1;
+  --surface: #ede4cf;
+  --foreground: #29261f;
+  --secondary: #5c574b;
+  --muted: #6f6a5d;
+  --border: #ddd3bd;
+  --panel-bg: #fbf7ec;
+  --panel-bg-strong: #fdfaf2;
+  --panel-bg-raised: #f2ecdc;
+  --panel-border: rgb(66 56 38 / 0.16);
+  --panel-shadow:
+    0 1px 2px rgb(66 56 38 / 0.05), 0 8px 24px -14px rgb(66 56 38 / 0.16);
+}
+
+/* 深色：深灰纸面 + 暖白字。饱和度都压得很低，
+   深灰纸的对比靠明度差而不是色相差。 */
+@media (prefers-color-scheme: dark) {
+  :root[data-lab-book="on"]:not([data-theme="light"]) {
+    --background: #26262a;
+    --surface: #313136;
+    --foreground: #e6e3da;
+    --secondary: #a9a599;
+    --muted: #9c988d;
+    --border: #3b3b40;
+    --panel-bg: #2d2d32;
+    --panel-bg-strong: #323237;
+    --panel-bg-raised: #29292e;
+    --panel-border: rgb(255 255 255 / 0.1);
+    --panel-shadow:
+      0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
+  }
+}
+
+/* 手动选了深色主题：同样单独补一份 */
+:root[data-lab-book="on"][data-theme="dark"] {
+  --background: #26262a;
+  --surface: #313136;
+  --foreground: #e6e3da;
+  --secondary: #a9a599;
+  --muted: #9c988d;
+  --border: #3b3b40;
+  --panel-bg: #2d2d32;
+  --panel-bg-strong: #323237;
+  --panel-bg-raised: #29292e;
+  --panel-border: rgb(255 255 255 / 0.1);
+  --panel-shadow:
+    0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
+}
+
+/* --- 赛博朋克 ---------------------------------------------------------------
+   锁定夜间模式的霓虹配色：底换成深蓝黑，强调色换成霓虹青，
+   面板描边和顶部高光掺一点青，就是那点「青光」。
+
+   「锁定」是字面意思：主题有两条通道（跟随系统的媒体查询、手动指定的
+   data-theme），代码块的 Shiki 配色也有同样的两条；这条规则写在它们
+   后面、特异性相同，所以无论哪个通道是什么值，都压不过这里——
+   主题开关在实验开着时不生效，关掉即恢复。
+
+   背景图用专用的一张霓虹隧道（青 + 品红光带，大面积近黑），与强调色、
+   品红选区正好同一套色；文字描边照抄深色那份（图里霓虹光带是亮区）。
+   手动切主题会把 color-scheme 内联写到 <html> 上，内联优先级最高，
+   想让滚动条、表单控件也跟着锁深色就得用 !important 押回来。 */
+:root[data-lab-cyberpunk="on"] {
+  color-scheme: dark !important;
+
+  --background: #0b0e17;
+  --surface: #121828;
+  --foreground: #e2e8ff;
+  --secondary: #9aa6d4;
+  --muted: #8391c4;
+  --border: #262e4d;
+  --accent: #22d3ee;
+  --accent-soft: #0a2b36;
+  --switch-knob: var(--foreground);
+  --switch-track: var(--border);
+  --gold: #f0b429;
+  --gold-soft: rgb(240 180 41 / 0.14);
+
+  --panel-bg: rgb(13 17 31 / 0.74);
+  --panel-bg-strong: rgb(13 17 31 / 0.88);
+  --panel-bg-raised: rgb(20 27 48 / 0.62);
+  --panel-border: rgb(34 211 238 / 0.14);
+  --panel-highlight: rgb(34 211 238 / 0.06);
+  --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
+  /* 专用壁纸：霓虹隧道（青 + 品红，75% 以上近黑），不与默认深色主题共用 */
+  --bg-image: url("/background-cyberpunk.png");
+  --bg-scrim: none;
+  --text-outline:
+    0.5px 0 rgb(0 0 0 / 0.5), -0.5px 0 rgb(0 0 0 / 0.5),
+    0 0.5px rgb(0 0 0 / 0.5), 0 -0.5px rgb(0 0 0 / 0.5),
+    0 0 2px rgb(0 0 0 / 0.4);
+  --eyebrow-color: var(--secondary);
+  --hero-core-surface: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--foreground) 24%, transparent), color-mix(in srgb, var(--foreground) 8%, transparent) 58%, transparent 100%);
+  --hero-core-border: color-mix(in srgb, var(--foreground) 30%, transparent);
+  --hero-core-shadow: 0 12px 34px rgb(0 0 0 / 0.14), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 4%, transparent);
+  --hero-core-shadow-pulse: 0 16px 42px rgb(0 0 0 / 0.18), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+/* 代码块同样锁定深色配色：不管主题通道在哪边，Shiki 双主题都取 --shiki-dark */
+:root[data-lab-cyberpunk="on"] .code-block pre[data-theme*=" "],
+:root[data-lab-cyberpunk="on"] .code-block pre[data-theme*=" "] span {
+  color: var(--shiki-dark);
+}
+
+/* 选中文本换用品红：青是页面里的强调色，品红留给「你正在参与」的瞬间
+   （划选文字），青 + 品红正好是这组配色的经典双色。
+   文字色不用白——白压在品红上只有 2.2:1，换深底色后 5.5:1。 */
+:root[data-lab-cyberpunk="on"] ::selection {
+  background: #ff2ea6;
+  color: #0b0e17;
 }
 
 /* --- 液态玻璃：让有底板的面板让出底面 ---------------------------------------
