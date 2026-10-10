@@ -1,18 +1,101 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import type { Post } from "@/lib/posts";
 import { formatDate } from "@/lib/date";
 import { LinkPending } from "@/components/link-pending";
 
-const coverThemes = ["cover-sky", "cover-violet", "cover-amber", "cover-mint"];
-
-function getCoverTheme(slug: string) {
-  const score = [...slug].reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  return coverThemes[score % coverThemes.length];
-}
-
 function getPostNumber(slug: string): string {
   const match = /^(\d+)(?:-|$)/.exec(slug);
   return match ? match[1].padStart(2, "0") : "00";
+}
+
+/** FNV-1a：把 slug 压成一个稳定的 32 位种子 */
+function hashSlug(slug: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < slug.length; i++) {
+    hash ^= slug.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/** mulberry32：拿种子造一个可复现的伪随机序列，服务端/客户端各算各的也对得上 */
+function mulberry32(seed: number) {
+  let state = seed;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), state | 1);
+    t = (t + Math.imul(t ^ (t >>> 7), t | 61)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 从 slug 派生整张封面的随机参数。
+ *
+ * 旧的 4 套预设类名只够换底色，这里改成连续值：
+ * 渐变用 oklch 生成——色相走「相邻色」（间隔 ≤ 50°）保证不花，
+ * 饱和度压在低位（chroma 0.05–0.10，莫兰迪灰调），明度锁在中段
+ * （0.38–0.74），太深发闷、太浅压不住白色文字；
+ * 三条轨道线和网格的几何（尺寸/位置/角度/密度）也一起参与随机，
+ * 第三条随机虚线/实线增加线条形状的变化。
+ * 同一篇文章永远同一张封面，不同文章肉眼上各有各的长相。
+ */
+function coverFromSlug(slug: string): {
+  background: CSSProperties;
+  grid: CSSProperties;
+  orbitOne: CSSProperties;
+  orbitTwo: CSSProperties;
+  orbitThree: CSSProperties;
+} {
+  const rand = mulberry32(hashSlug(slug));
+  const between = (min: number, max: number) => min + rand() * (max - min);
+  const pick = (min: number, max: number, digits = 0) =>
+    between(min, max).toFixed(digits);
+
+  const hue = between(0, 360);
+  const hue2 = hue + between(15, 50);
+  const hue3 = hue2 + between(15, 50);
+  const chroma = between(0.05, 0.1);
+  const tone = (lightness: number, h: number) =>
+    `oklch(${lightness.toFixed(3)} ${chroma.toFixed(3)} ${h.toFixed(1)})`;
+
+  return {
+    background: {
+      backgroundImage: `linear-gradient(${pick(120, 150, 1)}deg, ${tone(between(0.38, 0.46), hue)}, ${tone(between(0.5, 0.6), hue2)} 55%, ${tone(between(0.64, 0.74), hue3)})`,
+    },
+    grid: {
+      backgroundSize: `${pick(22, 34)}px ${pick(22, 34)}px`,
+      maskImage: `linear-gradient(${pick(100, 160)}deg, black, transparent 70%)`,
+    },
+    orbitOne: {
+      width: `${pick(52, 75)}%`,
+      height: `${pick(130, 170)}%`,
+      left: `${pick(15, 32)}%`,
+      top: `${pick(-35, -15)}%`,
+      transform: `rotate(${pick(-40, 40, 1)}deg)`,
+      opacity: pick(0.7, 0.95, 2),
+    },
+    orbitTwo: {
+      width: `${pick(34, 52)}%`,
+      height: `${pick(105, 135)}%`,
+      left: `${pick(35, 52)}%`,
+      top: `${pick(-20, 0)}%`,
+      transform: `rotate(${pick(-45, 45, 1)}deg)`,
+      opacity: pick(0.4, 0.6, 2),
+    },
+    // 第三条压轴的大弧：更接近圆形、允许探出画面被裁掉，
+    // 再随机虚/实线，和前两条细长椭圆拉开形状差距
+    orbitThree: {
+      width: `${pick(80, 115)}%`,
+      height: `${pick(55, 90)}%`,
+      left: `${pick(-15, 20)}%`,
+      top: `${pick(-30, -5)}%`,
+      transform: `rotate(${pick(-30, 30, 1)}deg)`,
+      opacity: pick(0.3, 0.45, 2),
+      borderStyle: rand() > 0.5 ? "dashed" : "solid",
+    },
+  };
 }
 
 /**
@@ -34,7 +117,7 @@ export function PostCard({
   post: Post;
   featured?: boolean;
 }) {
-  const coverTheme = getCoverTheme(post.slug);
+  const cover = coverFromSlug(post.slug);
 
   return (
     <article className={`group relative ${featured ? "h-full" : ""}`}>
@@ -61,10 +144,14 @@ export function PostCard({
           featured ? "flex flex-col md:grid md:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]" : ""
         }`}
       >
-        <div className={`cover-art ${coverTheme} ${featured ? "min-h-56 md:min-h-full" : "aspect-[2.2/1]"}`}>
-          <span className="cover-grid" aria-hidden="true" />
-          <span className="cover-orbit cover-orbit-one" aria-hidden="true" />
-          <span className="cover-orbit cover-orbit-two" aria-hidden="true" />
+        <div
+          className={`cover-art ${featured ? "min-h-56 md:min-h-full" : "aspect-[2.2/1]"}`}
+          style={cover.background}
+        >
+          <span className="cover-grid" style={cover.grid} aria-hidden="true" />
+          <span className="cover-orbit" style={cover.orbitOne} aria-hidden="true" />
+          <span className="cover-orbit" style={cover.orbitTwo} aria-hidden="true" />
+          <span className="cover-orbit" style={cover.orbitThree} aria-hidden="true" />
           <span className="cover-label">风不止 / NOTES</span>
           <span className="cover-index">{getPostNumber(post.slug)}</span>
         </div>
