@@ -219,10 +219,27 @@ async function loadScrimmedWallpaper(url: string): Promise<string> {
  */
 const scrollFlags = new WeakMap<HTMLElement, boolean>();
 
-/** 这块面板是否参与滚动偏移（吸顶/固定的不参与，见 panelToElement 的说明） */
-function elementScrolls(panel: HTMLElement): boolean {
-  const position = getComputedStyle(panel).position;
-  return position !== "sticky" && position !== "fixed";
+/**
+ * 面板是否真的钉在视口上。
+ *
+ * fixed 永远钉着；sticky 只有吸住之后才钉着——没吸住时它还在文档流里，
+ * 跟着页面一起滚。这一点决定坐标体系（文档坐标 + scroll 偏移，还是视口
+ * 坐标），判错的拖影很实在：关于页的鸣谢面板吸顶前有半屏多的自然位置，
+ * 整段滚动里它的视口坐标每帧都在变，而重建限流 120ms 一次，玻璃就一直
+ * 落在 DOM 后面。按「rect.top 是否已经压到 sticky top」区分之后，吸住
+ * 前后各自坐标稳定，只在跨越阈值的那一帧重建一次。
+ */
+function elementAnchored(
+  panel: HTMLElement,
+  style: CSSStyleDeclaration,
+  rect: DOMRect,
+): boolean {
+  const position = style.position;
+  if (position !== "sticky" && position !== "fixed") return false;
+  if (position === "fixed") return true;
+  // 站点只用 top 方向的 sticky；top 不是数值时按旧语义当钉住处理
+  const top = Number.parseFloat(style.top);
+  return Number.isFinite(top) ? rect.top <= top + 0.5 : true;
 }
 
 function panelToElement(
@@ -280,12 +297,16 @@ function panelToElement(
   /*
     吸顶/固定的元素（目录那块）用**视口坐标**并且不参与滚动偏移。
 
+    注意 sticky 有「还没吸住」的阶段：这时它跟着文档滚，得按文档坐标交给
+    渲染器（scroll: true），否则视口坐标每帧都在变，玻璃只能靠限流重建
+    跟跑，拖影明显。用 elementAnchored 按「是否真吸住」区分。
+
     渲染器对 scroll: true 的元素算 `y = rect.y - scrollY`，那是给跟随文档流的
-    元素准备的。目录钉在视口上、自己不动，再减一次 scrollY 就会一边滚动一边
+    元素准备的。钉住的元素自己不动，再减一次 scrollY 就会一边滚动一边
     往上跑。这类元素的位置变化由 buildElements 重新量（见那里的 ResizeObserver）
     ——它只在「开始吸」的那几帧里变。
   */
-  const anchored = !elementScrolls(panel);
+  const anchored = elementAnchored(panel, style, rect);
   scrollFlags.set(panel, !anchored);
 
   // 圆角在遮罩纹理里已经退化成直角的面板（超长正文）不上玻璃
@@ -662,10 +683,14 @@ export function LiquidGlassPanels() {
      * 静止时每帧的开销就只剩几次 getBoundingClientRect。
      *
      * 逐块返回而不是拼成一个长串：下面要靠「变化的是哪一块」决定要不要限流。
+     * dims 与 parts 一一对应，是「能上 WebGL 玻璃的面板」的最长边，供小面板
+     * 豁免限流用。走便宜版的面板（超长正文、嵌套卡片）记 0：它们不在渲染器
+     * 的元素列表里，尺寸再大也不该拖累别的面板逐帧跟随。
      */
     const geometryParts = () => {
       const scrollY = window.scrollY;
       const parts: string[] = [];
+      const dims: number[] = [];
       for (const panel of document.querySelectorAll<HTMLElement>(
         ".panel, .panel-strong, .panel-raised",
       )) {
@@ -682,8 +707,9 @@ export function LiquidGlassPanels() {
         parts.push(
           `${Math.round(r.left)},${Math.round(y)},${Math.round(r.width)},${Math.round(r.height)}`,
         );
+        dims.push(mustUseCheap(panel) ? 0 : Math.max(r.width, r.height));
       }
-      return parts;
+      return { parts, dims };
     };
 
     /*
@@ -744,6 +770,7 @@ export function LiquidGlassPanels() {
     let rafId = 0;
     let lastScrollY = -1;
     let lastGeometryParts: string[] = [];
+    let lastGeometryDims: number[] = [];
 
     /*
       变化期间的重建限流。
@@ -752,8 +779,20 @@ export function LiquidGlassPanels() {
       的话长面板每次都要重新生成一遍它的 SDF / 遮罩纹理，几十次下来就是明显
       的一卡一卡。这里压到 MIN_BUILD_INTERVAL_MS 一次，动画一停再补一次精确
       重建（tailPending），最终状态一定是对的。
+
+      限流有豁免：变化只涉及小面板时逐帧重建。玻璃矩形跟随 DOM 全靠重建，
+      目录展开/收起是 250ms 的高度过渡，限流 120ms 一次意味着 250ms 里玻璃
+      只跳两三步，看起来就是面板拖着一层错位的玻璃。小面板重生成遮罩纹理
+      很便宜（纹理上限 1024），逐帧跟不算负担。
+
+      豁免按「尺寸变化」判定，不按矩形变化：目录收起时下方面板会整块上移
+      （只有位置变），大小玻璃都不重生成遮罩——渲染器对纯位移走
+      ex0/ey0Top 位置检查，玻璃体纹理照用。只有「大面板自己变了尺寸」才
+      老实限流（超长正文那类走便宜版，dims 记 0，天然不参与）。
     */
     const MIN_BUILD_INTERVAL_MS = 120;
+    /** 最长边超过这个值的玻璃面板发生尺寸变化时，回退到限流重建 */
+    const SMOOTH_MAX_DIM = 1024;
     let lastBuildAt = 0;
     /** 限流期间被丢掉的那次重建，等几何停下来再补 */
     let tailPending = false;
@@ -781,14 +820,32 @@ export function LiquidGlassPanels() {
         不会触发强制重排）；几何变了才走完整重建，而重建内部还有一层签名
         守卫兜底，不会白调 setElements、也不会打断渲染器里正在跑的弹簧动画。
       */
-      const parts = geometryParts();
+      const { parts, dims } = geometryParts();
       const geometryChanged =
         parts.length !== lastGeometryParts.length ||
         parts.some((part, i) => part !== lastGeometryParts[i]);
       if (geometryChanged) {
+        /*
+          找出变化的块，决定是否豁免限流：只有「大玻璃面板变了尺寸」才限流；
+          小面板变尺寸、以及任何面板纯位移，都逐帧跟。这一步必须在覆盖
+          lastGeometryParts 之前做，比较的才是上一帧。
+        */
+        let smallOnly = true;
+        for (let i = 0; i < parts.length; i++) {
+          const changed =
+            i >= lastGeometryParts.length || parts[i] !== lastGeometryParts[i];
+          if (!changed) continue;
+          const sizeChanged =
+            i >= lastGeometryDims.length || dims[i] !== lastGeometryDims[i];
+          if (sizeChanged && dims[i] > SMOOTH_MAX_DIM) {
+            smallOnly = false;
+            break;
+          }
+        }
         lastGeometryParts = parts;
+        lastGeometryDims = dims;
         changed = true;
-        if (now - lastBuildAt >= MIN_BUILD_INTERVAL_MS) {
+        if (smallOnly || now - lastBuildAt >= MIN_BUILD_INTERVAL_MS) {
           lastBuildAt = now;
           tailPending = false;
           buildElements();
