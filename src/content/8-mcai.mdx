@@ -1,0 +1,153 @@
+export const metadata = {
+  title: "MCAI：让 AI 帮你管 Minecraft 服务器",
+  date: "2026-10-10",
+  publishedAt: "2026-10-10T11:00",
+  description: "一个纯 AI 开发的 Fabric 模组：接入 DeepSeek 等兼容 API，替服主答疑、生成命令并审查聊天记录，危险操作交给你审批。",
+  tags: ["技术", "工具", "游戏"],
+}
+
+开 Minecraft 服务器的朋友大概都经历过这些场景：
+
+- 有人半夜在聊天里骂人，你不在线，第二天才发现。
+- 玩家问「锋利五怎么获得」，同一套解释你讲了一遍又一遍。
+- 想批量执行几条服务器命令，只能一条条手动敲，还得担心手滑打错。
+
+MCAI 的想法很简单：让 AI 替你盯着服务器，替你和玩家对话，也替你把危险操作拦下来。它是一个纯 AI 开发的 Minecraft Fabric 模组，你只需要在配置文件里填一个 API Key，剩下的交给它。
+
+## 和 AI 聊天，还能让它干活
+
+玩家在聊天框里打 `!ai 帮我查附魔`，或者用命令 `/ai 帮我查附魔`，AI 就会回答。听起来像普通的聊天机器人，但它同时知道服务器里正在发生什么——当前时间、天气、最近的聊天记录，都在 AI 的上下文里，也支持多轮对话。
+
+更实用的是，玩家可以直接让 AI 执行命令。比如输入 `/ai 给我一把钻石剑`，AI 会生成对应的 Minecraft 命令，但不会直接执行，而是推到管理员那里等你批准。
+
+AI 还有一套人格系统：内置村民、猪灵、末影龙、苦力怕等主题人格，用 `/aipersona` 切换；服主也可以自己在 `config/mcai/personas/` 里写角色设定，支持中英双语。
+
+## 自动审查聊天记录
+
+这是 MCAI 最「管事儿」的功能。AI 每 30 分钟自动扫一遍聊天记录，发现违规内容就按严重程度扣分，累计到阈值再升级处罚：
+
+| 项目 | 默认值 | 配置项 |
+| --- | --- | --- |
+| 审查间隔 | 30 分钟 | `reviewIntervalMinutes` |
+| 黄牌阈值 | 累计 -30 分 | `yellowCardThreshold` |
+| 红牌阈值 | 累计 -60 分 | `redCardThreshold` |
+| 每轮恢复 | +5 分 | `scoreRecoveryPerInterval` |
+
+三级处罚就是「扣分 → 黄牌警告 → 红牌踢出」。分数每一轮会往回涨一点，所以处罚不是永久的；管理员本身不进入处罚流程。
+
+红牌踢出这一下仍然要过管理员：AI 只是把踢人推到审批队列，管理员用 `/aireview approve <id>` 批准、`/aireview reject <id>` 拒绝。如果在 `approvalTimeoutMinutes`（默认 10 分钟）内没人处理，超时会按「批准」放行——这个方向和下面命令审批的超时相反，是刻意的：审查没人管时，默认维持处罚。
+
+处罚不是拍脑袋决定的。管理员可以用 `/aireview last reasoning` 查看 AI 的完整推理过程，知道它为什么认定某条消息违规。也可以 `/aireview start` 手动触发一轮，或者干脆关掉自动审查、只在需要时手动批准。玩家那边可以用 `/aiscore` 查自己的行为分。
+
+## 安全审批：危险命令必须过你这一关
+
+AI 再聪明，你也不会放心让它随便执行 `op` 或者 `kill` 命令。MCAI 的安全审批机制是：AI 生成的所有命令都不能直接执行，必须提交审批。
+
+这条约束不只写在提示词里：AI 直接输出以 `/` 开头的文本命令会被拦截，所有命令必须通过 Tool 调用来执行，从而统一走审批流程。
+
+| 命令 | 谁用 | 作用 |
+| --- | --- | --- |
+| `!ai <消息>` / `/ai <消息>` | 玩家 | 和 AI 聊天 |
+| `/ai <让我做什么>` | 玩家 | 让 AI 生成命令并提交审批 |
+| `/aiscore` | 玩家 | 查看自己的行为分 |
+| `/aicancel [id/all]` | 玩家 | 取消自己发起的待审批命令 |
+| `/aiquery` | 管理员 | 查看待审批列表（显示编号） |
+| `/aiaccept <id>` | 管理员 | 批准单条命令或整条命令链 |
+| `/aireject <id>` | 管理员 | 拒绝 |
+| `/aicontrol [chat/review] [on/off]` | 管理员 | 运行中开关聊天或审查 |
+| `/aireload` | 管理员 | 手动重载配置 |
+
+管理员用 `/aiaccept` 批准、`/aireject` 拒绝，3 分钟不处理会自动取消。严格模式（`strictMode`，默认开启）下，只有白名单里的安全命令才免审批。
+
+命令链功能值得一提。玩家说「帮我建个红石电路」，AI 可能一次生成一长串命令（默认最多 10 条，见 `maxChainCommands`），它们会打包成一个审批单元，管理员一次批准全部执行，中间的执行间隔也能配置。
+
+## 游戏知识库：不用再手动导入 Wiki
+
+MCAI 的 Wiki 搜索是纯在线的。AI 直接搜 minecraft.wiki 和 zh.minecraft.wiki，返回摘要和完整页面链接，支持中英文，通过 `wikiLanguage` 配置控制语言（默认 `zh_cn`，在线搜索默认开启）。
+
+玩家问「下界合金怎么获得」，AI 会先去 Wiki 上查，再回来回答；也可以用 `/aikb 下界合金` 主动查一次。服主不需要提前准备任何知识库文件。
+
+## 单人游戏也能用
+
+Minecraft 的构造使得单人游戏也可以方便地运行这个 mod：跑在内置服务端上时，mod 能自动禁用审查系列功能，流畅使用，同时绝不浪费不必要的 token。
+
+装法和服务端一样：把 JAR 放进 `.minecraft/mods/`，进单人世界即可，配置文件和命令与服务端完全一致。你是世界 owner，默认拥有全部管理权限；再装个 Mod Menu 就能在游戏里直接改配置。
+
+## 安装
+
+你需要准备的东西：
+
+- Fabric 服务端或客户端
+- Java 25
+- 一个 DeepSeek API Key
+
+安装步骤就四步：
+
+1. 下载 JAR，丢进 `mods/`。
+2. 启动服务端，生成配置。
+3. 在 `config/mcai/config.json` 里填 API Key。
+4. 完事。
+
+配置支持热重载，改完自动生效，也可以 `/aireload` 手动触发。单人模式下行为审查会自动关闭——毕竟一个人玩不需要 AI 来管你。
+
+如果你想用 Mod Menu 在游戏内改配置，或者让审批通知里的可点击按钮正常工作，建议服务端和客户端都装上 MCAI：服务端负责 AI 逻辑和命令执行，客户端负责界面展示，职责分开。玩家客户端没装 mod 时，AI 相关文本会显示不出来，这时可以额外下载 `mcai-lang-pack.zip`，放进 `.minecraft/resourcepacks/` 启用；服主也能在 `server.properties` 里配置强制下载。
+
+API Key 是明文存储在配置文件里的，谨防泄露：保护好服务端文件，不要与其他 Key 混用。
+
+## 配置
+
+配置文件在 `config/mcai/config.json`，改完自动热重载（也可以 `/aireload` 手动触发）。常改的几项：
+
+| 配置项 | 默认值 | 作用 |
+| --- | --- | --- |
+| `apiEndpoint` | `https://api.deepseek.com` | API 地址 |
+| `apiKey` | 空 | API 密钥 |
+| `model` | `deepseek-v4-flash` | 模型名称 |
+| `strictMode` | `true` | 严格模式，只有白名单命令免审批 |
+| `enableAutoReview` | `true` | 是否启用自动审查 |
+| `enableCommandExecution` | `true` | 是否允许 AI 执行命令 |
+| `reviewIntervalMinutes` | 30 | 审查间隔（分钟） |
+| `wikiLanguage` | `zh_cn` | 在线搜索语言 |
+| `maxChainCommands` | 10 | 命令链最大条数 |
+| `contextMaxChars` | 20000 | 上下文最大字符数 |
+
+提示词文件 `system_prompt.txt` 和 `review_prompt.txt` 首次启动时自动创建，想改 AI 的性格和审查标准可以直接改它们；改坏了用 `/airesetprompts` 恢复内置版本。
+
+## 技术上的几个选择
+
+MCAI 连接的是 OpenAI 兼容 API，默认走 DeepSeek，但你可以换成任何兼容的服务商，甚至本地跑 LM Studio 也行（开启 `compatibilityMode` 即可）。
+
+聊天系统和审查系统可以用不同的 API 配置：
+
+| 系统 | 建议模型 | 原因 |
+| --- | --- | --- |
+| 聊天 | 好一点的模型 | 直接面向玩家，体验优先 |
+| 审查 | 便宜的小模型 | 批量扫描，主要看成本 |
+
+审查这套还单独配了超时：连接、单次请求、工具调用循环各有一档上限，避免某个请求卡住整轮扫描。上下文管理则有 20000 字符的硬上限，超出会自动截断，防止长篇对话把 token 烧光。
+
+## 开源与构建
+
+项目是 MIT 协议，代码在 GitHub 上公开。构建需要 JDK 25：
+
+```bash
+git clone https://github.com/lll114514lll1919810lll/mcai_mod.git
+cd mcai_mod
+./gradlew build
+```
+
+产物在 `build/libs/mcai-<version>.jar`（Windows 下用 `.\gradlew.bat build`）。
+
+Releases 页面提供三种版本：
+
+| 版本 | 说明 |
+| --- | --- |
+| 稳定版 | 推荐使用 |
+| Pre-release | 测试版，功能较新，可能存在 bug |
+| Nightly | 开发版，更新最快，在仓库的 `nightly-builds/` 目录下，只建议愿意反馈问题的用户尝鲜 |
+
+除此之外，仓库里还有一份[服主使用手册](https://github.com/lll114514lll1919810lll/mcai_mod/blob/main/USER_GUIDE.md)和英文版 README，配置项和命令的更完整说明可以翻它们。
+
+项目地址：[github.com/lll114514lll1919810lll/mcai_mod](https://github.com/lll114514lll1919810lll/mcai_mod)
+
+如果你在运营 Minecraft 服务器，或者单纯想让 AI 在游戏里做点实际的事情，可以下载试试。有问题欢迎在 Issues 里提。
