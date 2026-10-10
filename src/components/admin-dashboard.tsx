@@ -32,7 +32,11 @@ type Payload = {
   items: AdminComment[];
 };
 
-const PAGE_SIZE = 20;
+/**
+ * 每页条数。后台每条留言都完整展示（不截断），一页 20 条在屏幕上就是
+ * 一堵墙；10 条翻页成本低，找起留言来也更接近「一屏看完」。
+ */
+const PAGE_SIZE = 10;
 
 export function AdminDashboard() {
   const router = useRouter();
@@ -272,6 +276,8 @@ export function AdminDashboard() {
 
   const hasPrev = offset > 0;
   const hasNext = offset + PAGE_SIZE < total;
+  const page = Math.floor(offset / PAGE_SIZE) + 1;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="flex flex-col gap-8">
@@ -461,7 +467,8 @@ export function AdminDashboard() {
             ← 上一页
           </button>
           <span className="text-xs text-muted tabular-nums">
-            {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} / {total}
+            第 {page} / {pageCount} 页 · {offset + 1}–
+            {Math.min(offset + PAGE_SIZE, total)} 条
           </span>
           <button
             type="button"
