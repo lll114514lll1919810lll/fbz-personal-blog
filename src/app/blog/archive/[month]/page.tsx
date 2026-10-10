@@ -37,17 +37,14 @@ export default async function MonthArchivePage({
     <div className="flex flex-col gap-10 sm:gap-12">
       <header className="page-hero panel panel-strong flex flex-col gap-4 px-7 py-8 sm:px-10 sm:py-9">
         <p className="eyebrow">MONTHLY ARCHIVE</p>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-              {formatMonthLabel(group.month)}
-            </h1>
-            <p className="mt-3 text-base leading-relaxed text-secondary">
-              这个月写下的文章。
-            </p>
-          </div>
-          <span className="text-sm text-muted">{group.posts.length} 篇文章</span>
-        </div>
+        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          {formatMonthLabel(group.month)}
+        </h1>
+        {/* 篇数写进说明句：它修饰的是这个月，单独飘在 hero 右端
+            既找不到归属，也和列表页「月份标题 + 篇数」的表达不一致。 */}
+        <p className="text-base leading-relaxed text-secondary">
+          这个月写下的文章，共 {group.posts.length} 篇。
+        </p>
       </header>
 
       <section className="panel flex flex-col gap-4 px-5 py-5 sm:px-6">

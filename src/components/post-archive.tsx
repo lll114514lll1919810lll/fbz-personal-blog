@@ -68,7 +68,10 @@ export function PostArchive({
 function MonthSection({ group }: { group: MonthGroup }) {
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
+      {/* 篇数贴着标题排，不和标题分居两端：这个数字说明的是「这个月几篇」，
+          推到容器右缘后两者隔着一整行，视线得跨过去才能对上号。
+          基线对齐、弱化字号，读起来是标题的附属信息，和筛选栏的「技术 7」同一种表达。 */}
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <h2 className="text-lg font-semibold">
           <Link
             href={`/blog/archive/${group.month}`}
@@ -77,7 +80,9 @@ function MonthSection({ group }: { group: MonthGroup }) {
             {formatMonthLabel(group.month)}
           </Link>
         </h2>
-        <span className="text-xs text-muted">{group.posts.length} 篇</span>
+        <span className="text-xs tabular-nums text-muted">
+          {group.posts.length} 篇
+        </span>
       </div>
 
       {/* 卡片各自是独立面板，靠间距分隔。
