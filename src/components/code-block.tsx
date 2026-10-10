@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 /**
  * 代码块的交互层：折叠按钮、复制按钮、语言标签、横向滚动渐变提示。
@@ -22,6 +31,40 @@ type CodeBlockProps = React.HTMLAttributes<HTMLElement> & {
  * 真正需要折叠的是那种几十行、占掉一整屏的配置和脚本。
  */
 const FOLD_MIN_HEIGHT = 420;
+
+/**
+ * 数出代码有几行，用来渲染左侧行号槽位。
+ *
+ * 有语言标记的代码块由 rehype-pretty-code 拆成了 `[data-line]` 行节点，
+ * 直接数这些节点即可；没写语言标记的纯文本代码块只有一段文本，
+ * 这时退回按换行符数。
+ */
+function countCodeLines(node: ReactNode): number {
+  let lines = 0;
+  let text = "";
+  const walk = (n: ReactNode) => {
+    Children.forEach(n, (child) => {
+      if (typeof child === "string" || typeof child === "number") {
+        text += String(child);
+        return;
+      }
+      if (!isValidElement(child)) return;
+      const props = child.props as {
+        "data-line"?: unknown;
+        children?: ReactNode;
+      };
+      if (props["data-line"] !== undefined) {
+        lines += 1;
+        return;
+      }
+      walk(props.children);
+    });
+  };
+  walk(node);
+  if (lines > 0) return lines;
+  const trimmed = text.replace(/\n$/, "");
+  return trimmed.length > 0 ? trimmed.split("\n").length : 0;
+}
 
 export function CodeBlock({
   children,
@@ -52,6 +95,7 @@ export function CodeBlock({
   const [collapsed, setCollapsed] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bodyId = useId();
+  const lineCount = countCodeLines(children);
 
   // 量两件事：是否横向溢出（决定右侧渐变），以及是否需要折叠按钮
   useEffect(() => {
@@ -176,6 +220,27 @@ export function CodeBlock({
       >
         {children}
       </pre>
+
+      {/* 行号槽位：钉在左侧，横向滚动时不动。
+          pre 用透明左边框留出了这块空间，代码被裁在槽位右侧，
+          所以行号不用底色去盖代码。 */}
+      {lineCount > 0 && (
+        <div
+          className="code-block-gutter"
+          aria-hidden
+          /* 和 pre 用同一套折叠高度：展开时给具体值，收起时由 CSS 接管，
+             两边才一起过渡 */
+          style={
+            foldable && fullHeight && !collapsed
+              ? { maxHeight: fullHeight + 2 }
+              : undefined
+          }
+        >
+          {Array.from({ length: lineCount }, (_, i) => (
+            <span key={i}>{i + 1}</span>
+          ))}
+        </div>
+      )}
 
       {/* 右侧渐变：代码横向溢出、而且右边确实还有没看到的内容时才出现。
           滚到最右就收起来，不然最后几个字符永远压在半透明遮罩下面。 */}

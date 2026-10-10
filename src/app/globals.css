@@ -1670,6 +1670,23 @@ html {
 .code-block {
   position: relative;
   margin-top: 1.5em;
+  /* 左侧行号槽位宽度。行号层和 pre 的透明左边框必须用同一个值，
+     否则槽位和行号会错位，所以抽成变量只改一处。 */
+  --code-gutter-width: 3.125rem;
+}
+
+/* pre 的左边框做成了行号槽位，左边那条 1px 边框和顶部高光就落在了滚动
+   容器画不到的区域，这里用一层覆盖补回来，保证四条边一致。 */
+.code-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: var(--radius-panel);
+  pointer-events: none;
+  box-shadow:
+    inset 1px 0 0 var(--panel-border),
+    inset 0 1px 0 var(--panel-highlight);
 }
 
 .code-block pre code {
@@ -1685,28 +1702,45 @@ html {
   width: max-content;
   min-width: 100%;
   /* display:grid 是内联样式写的，这里不用重复声明 */
-  counter-reset: code-line;
 }
 
-/* 行号使用伪元素而不是实际文本节点：
-   这样视觉上可见，但不会进入 textContent、复制结果或用户的代码选区。 */
-.code-block pre code > [data-line] {
-  counter-increment: code-line;
-  position: relative;
-  padding-left: 3.5rem;
-}
-
-.code-block pre code > [data-line]::before {
+/* 行号槽位。
+   横向滚动时行号不能跟着代码走，但又不能用「底色盖住滑过来的代码」——
+   代码块是半透明面板，任何叠上去的底色都会和周围对不上，整条左边缘就
+   会变成一条突兀的色带。
+   所以改成让代码压根滑不进来：行号槽位由 pre 的透明左边框留出（见下面的
+   .code-block pre），滚动容器只把内容裁到内边框边缘。槽位里显示的仍是
+   pre 自己的面板底色，和右侧完全一致；行号由这一层单独绘制。
+   行号是伪元素之外的独立文本，因此不会进入复制结果和代码选区。 */
+.code-block-gutter {
   position: absolute;
   left: 0;
-  width: 2.5rem;
-  transform: translateX(-0.75rem);
+  /* 1px 是 pre 的上边框，加在内边距之前才对得上第一条代码行 */
+  top: 1px;
+  z-index: 1;
+  box-sizing: border-box;
+  width: var(--code-gutter-width);
+  /* 顶部内边距和 pre 一致，行号才会和代码行对齐 */
+  padding: 3.1rem 0.7rem 0 0;
+  overflow: hidden;
   color: var(--muted);
-  content: counter(code-line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.855rem;
+  line-height: 1.7;
   font-variant-numeric: tabular-nums;
   text-align: right;
   user-select: none;
   pointer-events: none;
+  /* 折叠时截断行号，和 pre 的高度过渡同步 */
+  transition: max-height 0.3s ease;
+}
+
+.code-block-gutter > span {
+  display: block;
+}
+
+.code-block.is-collapsed .code-block-gutter {
+  max-height: 18rem;
 }
 
 .code-block pre {
@@ -1718,13 +1752,16 @@ html {
      右侧比左侧多留一点：横向滚动到底时，最后几个字符要跟边框拉开距离，
      不然会贴边、也会顶进右侧那层渐变里。左侧不需要，代码块左对齐，
      多留反而让每行看起来缩进不齐。 */
-  padding: 3.1rem 2rem 1.5rem 1.25rem;
+  padding: 3.1rem 2rem 1.5rem 0;
   /* 亚克力：代码块也是面板，但用 raised 那档（更透），
      因为它通常叠在文章面板之上，再实就显厚重了 */
   background-color: var(--panel-bg-raised);
   border: 1px solid var(--panel-border);
+  /* 左边框加宽成透明的行号槽位：边框不在滚动容器内，横向滚动时代码
+     最多裁到内边框边缘，不会滑进行号区。底色默认铺到边框盒，
+     所以槽位里显示的还是同一层面板底色，不会出现色块拼接。 */
+  border-left: var(--code-gutter-width) solid transparent;
   border-radius: var(--radius-panel);
-  box-shadow: inset 0 1px 0 var(--panel-highlight);
   backdrop-filter: blur(var(--panel-blur)) saturate(var(--panel-saturate));
   overflow-x: auto;
   /* 纵向永远不滚：代码块按内容撑高，折叠靠 max-height 截断。
