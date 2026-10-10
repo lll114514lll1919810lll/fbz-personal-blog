@@ -141,7 +141,10 @@ export function getReadingTime(source: string): number {
 }
 
 /** 所有标签及其文章数，按文章数从多到少。 */
-export function getAllTags(): { tag: string; count: number }[] {
+/** 标签及其文章数 */
+export type TagCount = { tag: string; count: number };
+
+export function getAllTags(): TagCount[] {
   const counts = new Map<string, number>();
 
   for (const post of getAllPosts()) {
@@ -157,6 +160,89 @@ export function getAllTags(): { tag: string; count: number }[] {
 
 export function getPostsByTag(tag: string): Post[] {
   return getAllPosts().filter((post) => post.tags?.includes(tag));
+}
+
+/* ------------------------------------------------------- 按月归档 / 分页 --- */
+
+/**
+ * 每页多少篇。
+ *
+ * 6 是照着桌面三列定的：正好两行，一屏看完不用滚。手机一列时六张会长一些，
+ * 但列表页本来就是往下划的，可以接受。
+ */
+export const PAGE_SIZE = 6;
+
+/** 单月的归档：YYYY-MM 与它下面的文章（沿用 getAllPosts 的倒序） */
+export type MonthGroup = {
+  month: string; // YYYY-MM
+  posts: Post[];
+};
+
+/**
+ * 按月份分组，月份也按倒序（新月份在前）。
+ *
+ * 用 date 的前七位，不走 Intl/Date 解析：date 是定长 "YYYY-MM-DD"，切一下
+ * 最直接，也不会被时区影响（new Date("2026-10-05") 会按 UTC 解析，某些时区
+ * 上会算出上一个月）。
+ */
+export function groupPostsByMonth(posts: Post[]): MonthGroup[] {
+  const groups = new Map<string, Post[]>();
+  for (const post of posts) {
+    const month = post.date.slice(0, 7);
+    const bucket = groups.get(month);
+    if (bucket) bucket.push(post);
+    else groups.set(month, [post]);
+  }
+  return [...groups.entries()]
+    .map(([month, bucket]) => ({ month, posts: bucket }))
+    .sort((a, b) => b.month.localeCompare(a.month));
+}
+
+/** 分页后的结果。page 从 1 开始 */
+export type PagedPosts = {
+  posts: Post[];
+  page: number;
+  totalPages: number;
+  totalPosts: number;
+  /** 本页文章按月分组后的样子（可能横跨两个月） */
+  months: MonthGroup[];
+};
+
+/**
+ * 取某一页的文章。页码超出范围时返回空列表，不抛——页面那边自己给空状态。
+ *
+ * 页码从 1 开始而不是 0：它会出现在 URL 和「第 N 页」的文案里，
+ * /blog/1 比 /blog/0 自然。
+ */
+export function getPagedPosts(page: number): PagedPosts {
+  const all = getAllPosts();
+  const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+  // 防御：NaN / 负数 / 超过总数都夹回合法范围，避免算出空页或负偏移
+  const safePage = Math.min(Math.max(1, Math.floor(page) || 1), totalPages);
+  const posts = all.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  return {
+    posts,
+    page: safePage,
+    totalPages,
+    totalPosts: all.length,
+    months: groupPostsByMonth(posts),
+  };
+}
+
+/** 一共有几页。构建期枚举分页路由用 */
+export function getTotalPages(): number {
+  return Math.max(1, Math.ceil(getAllPosts().length / PAGE_SIZE));
+}
+
+/**
+ * 月份的中文标题，如 2026-10 → "2026 年 10 月"。
+ *
+ * 不走 toLocaleDateString：那个的输出随运行时 locale 变化（"October 2026"、
+ * "2026年10月"），而静态产物要在不同机器上都一致。
+ */
+export function formatMonthLabel(month: string): string {
+  const [year, m] = month.split("-");
+  return `${year} 年 ${Number(m)} 月`;
 }
 
 /**

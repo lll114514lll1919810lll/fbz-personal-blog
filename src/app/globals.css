@@ -2221,6 +2221,55 @@ html {
   outline-offset: 2px;
 }
 
+  /* 分页：页码和上下页共用一个方块的尺寸，只是圆角不同。
+     44px 见方是触控热区，和顶栏那几个控件保持同一标准。 */
+  .lab-page-link {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--panel-bg-raised);
+    color: var(--foreground);
+    font-size: 0.875rem;
+    transition: border-color 180ms ease, color 180ms ease;
+  }
+
+  @media (hover: hover) {
+    .lab-page-link:hover {
+      border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+      color: var(--accent);
+    }
+  }
+
+  .lab-page-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* 当前页：不可点，所以不要 hover 反馈，也别做成按钮 */
+  .lab-page-link.is-current {
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    /* tabular-nums：页码都是一位数时宽度一致，跳页时不会左右晃 */
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  /* 到头的上一页/下一页：留着占位，让页码始终居中，
+     不因为某一端消失而整排偏移 */
+  .lab-page-link.is-off {
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
+    opacity: 0.45;
+  }
+
 .btn-pill {
   display: inline-flex;
   flex: none;
@@ -2414,6 +2463,25 @@ html {
     border-color 不留宽度：面板是边框盒，改宽度会动布局。
   */
   border-color: transparent;
+}
+
+/*
+  翻页按钮例外：它那圈边框要留着。
+
+  上面清掉边框是因为大面板的边缘由玻璃负责，DOM 再描一遍会叠成双线。但翻页
+  按钮只有 44px 见方，玻璃在这么小的尺寸上只够画出一点边缘压缩——它撑不起
+  一条清晰的轮廓，边框一清按钮就和背景糊在一起，分不清哪是个按钮。
+
+  到头的那两个不恢复：它们是 aria-hidden 的占位，本来就该隐身。
+*/
+:root[data-lab-liquidglass="on"] .lab-page-link.panel:not(.is-off):not(.is-current) {
+  border-color: var(--border);
+}
+
+/* 当前页再单独提一档：它是这一排里唯一有强调色的，玻璃模式下面板底被压到
+   两成透明，那点强调色会跟着淡掉，认不出当前在第几页 */
+:root[data-lab-liquidglass="on"] .lab-page-link.is-current {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 /*

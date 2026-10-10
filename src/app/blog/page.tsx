@@ -1,15 +1,27 @@
 import type { Metadata } from "next";
-import { PostCard } from "@/components/post-card";
-import { TagFilterBar } from "@/components/tag-filter-bar";
-import { getAllPosts, getAllTags } from "@/lib/posts";
+import { PostArchive } from "@/components/post-archive";
+import { getAllTags, getPagedPosts } from "@/lib/posts";
 
 export const metadata: Metadata = {
   title: "文章",
-  description: "风不止的全部文章列表，可按标签筛选。",
+  description: "风不止的全部文章列表，按月归档，可按标签筛选。",
 };
 
+/** 第一页。分页后的页面在 /blog/page/[page] */
 export default function BlogPage() {
-  const posts = getAllPosts();
+  return (
+    <BlogListPage page={1} />
+  );
+}
+
+/*
+  列表页和分页页共用这一段，只是页码不同。
+
+  放在同一个文件里而不是另开组件：两者共用的只是「取数据 + 页头 + 归档区」，
+  而页头本身就是这一页的一部分，拆出去反而要把标题、描述传来传去。
+*/
+function BlogListPage({ page }: { page: number }) {
+  const paged = getPagedPosts(page);
   const tags = getAllTags();
 
   return (
@@ -20,33 +32,14 @@ export default function BlogPage() {
           <div>
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">文章</h1>
             <p className="mt-3 max-w-xl text-base leading-relaxed text-secondary">
-              从实践出发，记录技术、产品和那些值得慢慢想清楚的事情。
+              从实践出发，记录技术、产品和那些值得慢慢想清楚的事情。按月归档。
             </p>
           </div>
-          <span className="text-sm text-muted">{posts.length} 篇文章</span>
+          <span className="text-sm text-muted">{paged.totalPosts} 篇文章</span>
         </div>
       </header>
 
-      <section className="panel flex flex-col gap-4 px-5 py-5 sm:px-6">
-        <div>
-          <p className="eyebrow">FILTER BY TOPIC</p>
-          <p className="mt-2 text-sm text-secondary">按主题浏览文章</p>
-        </div>
-        <TagFilterBar tags={tags} />
-      </section>
-
-      {/* 卡片各自是独立面板，靠间距分隔（不再用分隔线）。
-          手机 1 列、平板 2 列、电脑 3 列：768px 下三列每张只剩 ~230px，
-          封面和标题会挤成一团，所以三列从 lg(1024px) 才开始。 */}
-      {posts.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {posts.map((post) => (
-            <PostCard key={post.slug} post={post} />
-          ))}
-        </div>
-      ) : (
-        <p className="py-8 text-sm text-muted">还没有文章。</p>
-      )}
+      <PostArchive paged={paged} tags={tags} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getAllPosts, getAllTags } from "@/lib/posts";
+import { getAllPosts, getAllTags, getTotalPages, groupPostsByMonth } from "@/lib/posts";
 import { siteConfig } from "@/lib/site";
 
 /*
@@ -34,6 +34,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     { url: `${base}/blog/`, changeFrequency: "weekly", priority: 0.9 },
+    /*
+      分页页与月度归档页：内容都是文章的另一种组织方式，权重给得比 /blog 低。
+
+      分页页从 2 开始枚举——第 1 页就是 /blog 本身，两个地址指向同一份内容
+      会被判成重复；月度归档同理，只有文章真的跨了月的那几个月才会出现。
+    */
+    // 第 1 页不列：它和 /blog 同内容，上面已经收了 /blog/
+    ...Array.from({ length: Math.max(0, getTotalPages() - 1) }, (_, i) => ({
+      url: `${base}/blog/page/${i + 2}/`,
+      changeFrequency: "weekly" as const,
+      priority: 0.5,
+    })),
+    ...groupPostsByMonth(getAllPosts()).map(({ month }) => ({
+      url: `${base}/blog/archive/${month}/`,
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
+    })),
+
     { url: `${base}/tags/`, changeFrequency: "weekly", priority: 0.6 },
     { url: `${base}/about/`, changeFrequency: "yearly", priority: 0.5 },
     // 实验室：底栏有入口，页面上没有常读内容，只给很低的权重。
