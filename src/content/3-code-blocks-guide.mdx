@@ -19,19 +19,19 @@ export const metadata = {
 实现方式：
 
 - 使用 CSS counter 自动生成行号
-- 针对 Shiki 生成的 [data-line] 元素显示行号
-- 行号通过 ::before 伪元素生成，不会进入代码文本
-- 设置 user-select: none，选择代码时不会选中行号
-- 复制按钮读取的 textContent 也不会包含行号
+- 针对 Shiki 生成的 `[data-line]` 元素显示行号
+- 行号通过 `::before` 伪元素生成，不会进入代码文本
+- 设置 `user-select: none`，选择代码时不会选中行号
+- 复制按钮读取的 `textContent` 也不会包含行号
 
 ## 明暗双主题
 
 同一段代码会同时输出两套颜色：
 
-- 浅色系统用 github-light
-- 深色系统用 github-dark
+- 浅色系统用 `github-light`
+- 深色系统用 `github-dark`
 
-切换配色纯靠CSS，不加载任何 JavaScript，也不会闪烁。
+切换配色纯靠 CSS，不加载任何 JavaScript，也不会闪烁。
 
 ## 复制按钮
 

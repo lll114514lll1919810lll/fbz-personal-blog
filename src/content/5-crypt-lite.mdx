@@ -14,7 +14,7 @@ export const metadata = {
 
 ## 它不负责什么
 
-没有 KDF，也没有盐和认证标签。密钥只过一个 FNV-1a 哈希，轮次是个随手可改的整数。
+没有 KDF（密钥派生函数），也没有盐和认证标签。密钥只过一个 FNV-1a 哈希，轮次是个随手可改的整数。
 
 **别用它保护密码、证件、私钥、财务数据，或者任何真正需要保密的内容。** 这类场景请用经过审计的加密方案。
 
@@ -75,7 +75,7 @@ out32[perm[i]] = (((v ^ k) & 0x00ffffff) | (v & 0xff000000)) >>> 0;
 
 ## 五个端
 
-### 网页版
+### 网页版/Android
 
 `web/index.html` 是一个自包含的单文件页面，41 KB，没有构建步骤，也没有后端。文本和图片都在浏览器里处理，页面不上传任何东西。
 
@@ -83,8 +83,10 @@ out32[perm[i]] = (((v ^ k) & 0x00ffffff) | (v & 0xff000000)) >>> 0;
 
 <figure className="post-figure">
   <img src="/images/crypt-lite/01-web.jpg" alt="网页版界面：密钥、轮次、seed 和输入输出框，页面底部是加密、解密、复制结果、回填输入和清空按钮" width={640} height={1347} />
-  <figcaption>图 1：网页版。密钥和轮次填在左边，seed 是密钥哈希出来的值，只用来对照。</figcaption>
+  <figcaption>图 1：网页版（移动端样式）。密钥和轮次填在上边，seed 是密钥哈希出来的值，只用来对照。</figcaption>
 </figure>
+
+Android APK 只是套了一层 WebView 壳，本质上就是上面那份 `index.html`，用 Java 层补全了平台能力，API 24 起。
 
 ### Windows
 
@@ -102,7 +104,7 @@ Win32 GUI，纯 C，图片交给 GDI+。控件是 owner-draw 自己画的，主�
 
 ### Linux
 
-GTK3，也是纯 C。
+GTK3，也是纯 C。秉承着“能用就行”，未特别做美化。
 
 <figure className="post-figure">
   <img src="/images/crypt-lite/04-linux-text.jpg" alt="Linux 版文本加解密界面，输入 Linux GUI，输出一段混排字符，状态栏显示加密完成 1 轮次 0 ms" width={1233} height={909} />
@@ -113,10 +115,6 @@ GTK3，也是纯 C。
   <img src="/images/crypt-lite/05-linux-image.jpg" alt="Linux 版图片加解密界面，加载了一张星空插画，显示已加载 2559 x 1589，旁边有加密、解密、保存 PNG 按钮" width={1233} height={909} />
   <figcaption>图 5：Linux 版图片页。加载后会显示原始尺寸。</figcaption>
 </figure>
-
-### Android
-
-WebView 壳，套的就是上面那份 `index.html`，Java 层补平台能力。API 24 起。
 
 ### npm 与命令行
 
@@ -149,9 +147,11 @@ Node 18 起，图片部分依赖 `pngjs`。库模式可以直接用 `encryptText
 
 ## 把 Windows 版压到 78 KB
 
-`encrypt.exe` 从 94720 字节降到 79872 字节，减了 15.7%，功能和界面没动。过程记在 `SIZE_OPTIMIZATION.md` 里。
+`encrypt.exe` 从 94720 字节降到 79872 字节，减了 15.7%，功能和界面没动。
 
-改动只有两处。
+过程十分有趣：试过几个常规做法，在本项目里都是负收益：`-flto` 多出 3584 字节，`-ffunction-sections` 配 `-Wl,--gc-sections` 多出 2560 字节。代码量太小，跨文件内联和分段的开销超过了死代码消除省下的部分。
+
+最终改动只有两处：
 
 **图标重压缩。** `app.ico` 占了整个 exe 的 31.6%（29889 / 94720），里面 4 张 PNG 用的是自适应滤波，对这种降采样噪声图反而压得更差。穷举滤波方式和 deflate 策略之后，最优组合是 `filter=0` 加 deflate level 9，256×256 那张从 21356 降到 15402 字节。像素逐字节比对，4 张全部 `diffBytes=0`。
 
@@ -162,8 +162,6 @@ set SIZEOPT=-fno-asynchronous-unwind-tables -fno-ident -mno-stack-arg-probe -Wfr
 ```
 
 省得最多的是 `-mno-stack-arg-probe`，单独贡献 7680 字节。MinGW 默认在每个函数序言里插栈探测代码，关掉以后所有函数一起变小。代价是栈帧超过一页（4096 字节）时可能跨过守护页崩溃，所以实测扫了一遍全程序栈帧，最大 2224 字节（`WndProc`），还有余量。`-Wframe-larger-than=4096` 留着当保险，以后有人写出超大栈帧会在编译期告警。
-
-顺手试过几个常规做法，在本项目里都是负收益：`-flto` 多出 3584 字节，`-ffunction-sections` 配 `-Wl,--gc-sections` 多出 2560 字节。代码量太小，跨文件内联和分段的开销超过了死代码消除省下的部分。
 
 ## 边界
 

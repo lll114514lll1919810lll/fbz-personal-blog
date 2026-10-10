@@ -74,6 +74,32 @@ export const metadata = {
 > 表格、删除线、任务列表这些是 GFM 扩展语法，
 > 由 `remark-gfm` 插件支持，已经配好了。
 
+表格不只能列语法，也适合整理配置和对比方案。例如把文章元信息写成一张速查表：
+
+| 字段 | 是否必填 | 示例 | 用途 |
+| --- | --- | --- | --- |
+| `title` | 是 | `用 MDX 写文章` | 页面标题和文章列表标题 |
+| `publishedAt` | 否 | `2026-10-06T09:00` | 同一天发布多篇文章时排序 |
+| `description` | 建议 | `介绍文章内容` | 列表摘要和 SEO 描述 |
+| `tags` | 否 | `["建站", "技术"]` | 把文章归入标签页 |
+
+也可以用来做发布前检查，让读者一眼看出每项工作的状态：
+
+| 检查项 | 状态 | 说明 |
+| --- | --- | --- |
+| 元信息 | 已完成 | `title`、`date` 已填写 |
+| 正文标题 | 已完成 | 没有重复的一级标题 |
+| 配图说明 | 待检查 | 确认 `alt` 能描述图片内容 |
+| 构建预览 | 未开始 | 发布前在浏览器里检查排版 |
+
+如果需要在正文里比较几种方案，也可以把优缺点放进表格：
+
+| 写法 | 优点 | 限制 |
+| --- | --- | --- |
+| Markdown 表格 | 简单、可读、无需组件 | 不适合复杂交互 |
+| `<figure>` 配图 | 适合截图和流程图 | 需要准备图片文件 |
+| React 组件 | 可以做动态数据和交互 | 需要额外编写组件 |
+
 **任务列表**
 
 - [x] 搭建博客骨架
@@ -135,6 +161,71 @@ MDX 允许在正文里写 JSX，所以 HTML 的原生控件也能直接使用。
 
 这里的 `defaultChecked` 和 `defaultValue` 是 JSX 写法，表示初始值；不要把它们误写成 HTML 中依赖布尔值的字符串。原生控件只能处理浏览器自带的交互，如果要点击按钮后修改文章内容、请求接口或保存状态，就需要编写一个带 `"use client"`的 React 组件，再在 MDX 中导入它。
 
+## 在 MDX 里画几个图表
+
+不想引入图表库时，也可以直接写内联 SVG。`viewBox` 负责定义坐标系，`rect` 适合画柱子，`polyline` 适合连接折线上的数据点：
+
+<figure className="post-figure">
+  <svg viewBox="0 0 640 300" role="img" aria-labelledby="bar-chart-title bar-chart-desc">
+    <title id="bar-chart-title">每月文章发布数量</title>
+    <desc id="bar-chart-desc">四个月分别发布 3、5、4、8 篇文章，六月最多。</desc>
+    <line x1="70" y1="240" x2="600" y2="240" stroke="var(--border)" strokeWidth="2" />
+    <line x1="70" y1="40" x2="70" y2="240" stroke="var(--border)" strokeWidth="2" />
+    <rect x="120" y="165" width="70" height="75" rx="8" fill="var(--accent)" fillOpacity="0.55" />
+    <rect x="240" y="115" width="70" height="125" rx="8" fill="var(--accent)" fillOpacity="0.7" />
+    <rect x="360" y="140" width="70" height="100" rx="8" fill="var(--accent)" fillOpacity="0.82" />
+    <rect x="480" y="40" width="70" height="200" rx="8" fill="var(--accent)" />
+    <text x="155" y="265" textAnchor="middle" fill="var(--secondary)">三月</text>
+    <text x="275" y="265" textAnchor="middle" fill="var(--secondary)">四月</text>
+    <text x="395" y="265" textAnchor="middle" fill="var(--secondary)">五月</text>
+    <text x="515" y="265" textAnchor="middle" fill="var(--secondary)">六月</text>
+  </svg>
+  <figcaption>图 1：用多个 <code>rect</code> 元素组成的柱状图。</figcaption>
+</figure>
+
+折线图只需要把一组坐标点交给 `polyline`。坐标可以来自脚本计算，也可以先手工写死，适合展示一组固定的示例数据：
+
+<figure className="post-figure">
+  <svg viewBox="0 0 640 300" role="img" aria-labelledby="line-chart-title line-chart-desc">
+    <title id="line-chart-title">文章页面访问量趋势</title>
+    <desc id="line-chart-desc">从周一到周日，访问量从 120 增长到 260，中间周四略有下降。</desc>
+    <line x1="70" y1="240" x2="600" y2="240" stroke="var(--border)" strokeWidth="2" />
+    <line x1="70" y1="40" x2="70" y2="240" stroke="var(--border)" strokeWidth="2" />
+    <polyline points="90,190 170,155 250,135 330,150 410,105 490,80 570,55" fill="none" stroke="var(--accent)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="90" cy="190" r="7" fill="var(--accent)" stroke="var(--background)" strokeWidth="3" />
+    <circle cx="170" cy="155" r="7" fill="var(--accent)" stroke="var(--background)" strokeWidth="3" />
+    <circle cx="250" cy="135" r="7" fill="var(--accent)" stroke="var(--background)" strokeWidth="3" />
+    <circle cx="330" cy="150" r="7" fill="var(--accent)" stroke="var(--background)" strokeWidth="3" />
+    <circle cx="410" cy="105" r="7" fill="var(--accent)" stroke="var(--background)" strokeWidth="3" />
+    <circle cx="490" cy="80" r="7" fill="var(--accent)" stroke="var(--background)" strokeWidth="3" />
+    <circle cx="570" cy="55" r="7" fill="var(--accent)" stroke="var(--background)" strokeWidth="3" />
+    <text x="90" y="265" textAnchor="middle" fill="var(--secondary)">一</text>
+    <text x="170" y="265" textAnchor="middle" fill="var(--secondary)">二</text>
+    <text x="250" y="265" textAnchor="middle" fill="var(--secondary)">三</text>
+    <text x="330" y="265" textAnchor="middle" fill="var(--secondary)">四</text>
+    <text x="410" y="265" textAnchor="middle" fill="var(--secondary)">五</text>
+    <text x="490" y="265" textAnchor="middle" fill="var(--secondary)">六</text>
+    <text x="570" y="265" textAnchor="middle" fill="var(--secondary)">日</text>
+  </svg>
+  <figcaption>图 2：用 <code>polyline</code> 和 <code>circle</code> 组成的折线图。</figcaption>
+</figure>
+
+环形图可以用 SVG 的圆环描边表示比例。下面的例子表示一项任务完成了 72%，`strokeDasharray` 控制已完成和未完成的长度：
+
+<figure className="post-figure">
+  <svg viewBox="0 0 240 190" role="img" aria-labelledby="donut-chart-title donut-chart-desc">
+    <title id="donut-chart-title">文章发布进度</title>
+    <desc id="donut-chart-desc">文章发布进度为百分之七十二。</desc>
+    <circle cx="120" cy="82" r="54" fill="none" stroke="var(--border)" strokeWidth="18" />
+    <circle cx="120" cy="82" r="54" fill="none" stroke="var(--accent)" strokeWidth="18" strokeLinecap="round" strokeDasharray="244 339" transform="rotate(-90 120 82)" />
+    <text x="120" y="90" textAnchor="middle" fill="var(--foreground)" fontSize="24" fontWeight="700">72%</text>
+    <text x="120" y="178" textAnchor="middle" fill="var(--secondary)" fontSize="14">发布进度</text>
+  </svg>
+  <figcaption>图 3：用两个 <code>circle</code> 叠加出的环形进度图。</figcaption>
+</figure>
+
+这类 SVG 适合少量、固定的数据。数据经常变化或需要悬停提示、筛选和动画时，应该把图表封装成 React 组件，而不是在每篇文章里手写坐标。
+
 ## 怎么配图
 
 图片放到 `public/` 里，正文用 `<figure>` 把图片和图注包在一起：
@@ -156,9 +247,7 @@ MDX 允许在正文里写 JSX，所以 HTML 的原生控件也能直接使用。
 
 四个容易踩的点：
 
-- **`className="post-figure"` 不能省。** 配图样式挂在 `.post-figure` 上，而不是挂在
-  `figure` 上——代码高亮插件也会用 `<figure>` 来包代码块，写成泛匹配会把代码块的
-  外边距一起改掉。
+- **`className="post-figure"` 不能省。** 配图样式挂在 `.post-figure` 上，而不是挂在 `figure` 上——代码高亮插件也会用 `<figure>` 来包代码块，写成泛匹配会把代码块的外边距一起改掉。
 - **`<img>` 要自己闭合**（` />`）。MDX 按 JSX 解析，这里不是 HTML。
 - **`width` / `height` 建议写上。** 浏览器拿它预留位置，图片加载完之前页面不会跳动。
 - **`alt` 要认真写。** 它既是图片加载失败时的替代文字，也是屏幕阅读器读出来的内容。

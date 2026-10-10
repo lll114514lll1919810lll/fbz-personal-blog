@@ -3,7 +3,7 @@ export const metadata = {
   date: "2026-10-08",
   publishedAt: "2026-10-08T09:00",
   description: "OpenCode Zen 的匿名免费通道实测：装 DSH 插件和自建网关两条路的完整配置、六个坑的复现，以及模型可用性数据。",
-  tags: ["技术", "工具"],
+  tags: ["技术", "工具", "AI"],
 }
 
 OpenCode Zen 有一条**匿名免费通道**——不需要登录或者 API Key，鉴权头就是字面量 `public`。DeepSeek Harness（下称 DSH）里想用上它，目前有两条路：
@@ -130,7 +130,13 @@ https://opencode.ai/zen/v1   ← Authorization: Bearer public
   <figcaption>图 1：DSH 的「添加插件」对话框。填包名即可，安装源可以切到国内镜像。</figcaption>
 </figure>
 
-或者用命令行。⚠️ **桌面版不能用这条命令**——`dsh` 的 CLI 显式拒绝 `desktop` 这个 profile 名：
+或者用命令行:
+
+```sh
+dsh plugin --profile web add @opencode2dsh/dsh-plugin
+```
+
+⚠️ **桌面版不能用这条命令**——`dsh` 的 CLI 显式拒绝 `desktop` 这个 profile 名：
 
 ```js
 function rejectElectronProfile(program, profile) {
@@ -139,15 +145,11 @@ function rejectElectronProfile(program, profile) {
 }
 ```
 
-`desktop` profile 由 Electron 应用独占托管，所以：**桌面版用户请走设置 → 插件市场**，不要试图跑命令行。命令行只适用于自建 / Web profile：
-
-```sh
-dsh plugin --profile web add @opencode2dsh/dsh-plugin
-```
+`desktop` profile 由 Electron 应用独占托管，所以：**桌面版用户请走设置 → 插件市场**，不要试图跑命令行。
 
 > 顺带一提：`dsh plugin --profile <name> <args>` 其实就是把参数**转发给 pnpm** 在 profile 目录里执行。所以 `outdated` / `update` / `add` / `list` 都能直接用。
 
-**你应该看到**：命令输出里出现 `+ @opencode2dsh/dsh-plugin x.y.z`，没有红色报错。常见报错，DSH 一般也能帮你解决。
+**你应该看到**：命令输出里出现 `+ @opencode2dsh/dsh-plugin x.y.z`，没有红色报错。常见报错问 DSH ，它自己一般也能帮你解决。
 
 ### 步骤 2：确认模型出现
 
@@ -193,7 +195,7 @@ dsh plugin --profile web add @opencode2dsh/dsh-plugin
 
 **跳过这一步会怎样？** 插件会直接用你的真实 IP 请求上游。能用，但很快会撞上限流，也就是很多人遇到的"对话中报限流错误"。
 
-**请先完成方法二的步骤 1 到步骤 3**，拿到一份端口清单（形如 `127.0.0.1:24001`、`127.0.0.1:24002`……），然后回到这里。
+**请先完成 [方法二](#三方法二自建网关约-30-分钟) 的步骤 1 到步骤 3**，拿到一份端口清单（形如 `127.0.0.1:24001`、`127.0.0.1:24002`……），然后回到这里。
 
 #### 3.1 找到配置文件
 
