@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:server": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-test-server.ps1",
+    "test:server": "scripts\\start-test-server.bat",
     "lint": "eslint",
     "test": "tsx scripts/test-toc.ts",
     "test:theme": "node scripts/check-theme.cjs",

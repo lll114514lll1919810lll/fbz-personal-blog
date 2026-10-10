@@ -23,7 +23,7 @@ pnpm dev
 | `pnpm lint` | ESLint 检查 |
 | `pnpm test` | 检查文章目录锚点 |
 | `pnpm test:theme` | 检查主题相关 CSS |
-| `pnpm test:server` | 在 Windows 上启动测试服务器（可加 `-Port 3001`） |
+| `pnpm test:server` | 在 Windows 上启动测试服务器（`scripts/start-test-server.bat`，可加端口参数，如 `pnpm test:server -- 3001`） |
 | `pnpm preview:cf` | 用 wrangler 本地预览静态产物 + 评论接口 |
 
 全新克隆后建议先运行 `pnpm typegen && pnpm typecheck`。

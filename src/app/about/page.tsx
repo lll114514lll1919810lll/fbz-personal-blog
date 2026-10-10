@@ -139,7 +139,7 @@ export default function AboutPage() {
         <aside className="panel panel-strong prose max-w-3xl px-6 py-7 sm:px-10 sm:py-9 lg:sticky lg:top-20">
           <h2>鸣谢</h2>
           <p>
-            这个站站在许多开源项目的肩膀上，谢谢它们。
+            这个站可以说是站在许多开源项目的肩膀上，谢谢它们。
           </p>
           <ul>
               <li>

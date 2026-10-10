@@ -52,7 +52,7 @@ export const metadata = {
 注意上面的示例正文没有 `# 一级标题`。因为文章页的页头已经渲染了 `metadata.title`，
 正文再写一遍标题就会出现两个一模一样的大标题。
 
-正文从 `## 二级标题` 或普通段落开始就行。
+正文从`## 二级标题`或普通段落开始就行。
 
 ## 日期格式不能写错
 
@@ -79,6 +79,61 @@ export const metadata = {
 - [x] 搭建博客骨架
 - [x] 写第一篇文章
 - [ ] 部署上线
+
+## 还能直接写哪些控件
+
+MDX 允许在正文里写 JSX，所以 HTML 的原生控件也能直接使用。它们适合做设置说明、参数预览和可展开的补充内容，不需要额外导入组件：
+
+<details>
+  <summary>展开查看一组原生控件</summary>
+
+  <fieldset>
+    <legend>发布设置</legend>
+
+    <label>
+      <input type="checkbox" defaultChecked />
+      已完成校对
+    </label>
+
+    <label>
+      <input type="radio" name="visibility" value="public" defaultChecked />
+      公开
+    </label>
+    <label>
+      <input type="radio" name="visibility" value="draft" />
+      草稿
+    </label>
+
+    <label>
+      分类
+      <select defaultValue="tech">
+        <option value="tech">技术</option>
+        <option value="life">生活</option>
+      </select>
+    </label>
+
+    <label>
+      摘要
+      <textarea defaultValue="这是一段可以直接编辑的摘要。" rows={3} />
+    </label>
+  </fieldset>
+</details>
+
+像 `<details>`、复选框、单选框、下拉框和文本框这样的控件由浏览器直接提供行为。数字进度也可以这样写：
+
+<label>
+  构建进度
+  <progress value={72} max={100}>72%</progress>
+</label>
+
+<label>
+  存储空间
+  <meter min={0} max={100} low={60} high={85} optimum={30} value={68}>
+    68%
+  </meter>
+</label>
+
+这里的 `defaultChecked` 和 `defaultValue` 是 JSX 写法，表示初始值；不要把它们误写成 HTML 中依赖布尔值的字符串。原生控件只能处理浏览器自带的交互，如果要点击按钮后修改文章内容、请求接口或保存状态，就需要编写一个带 `"use client"`的 React 组件，再在 MDX 中导入它。
 
 ## 怎么配图
 
@@ -121,7 +176,7 @@ const answer = 42
 ```
 
 支持哪些语言、不写语言标记会怎样、复制按钮在 http 下为什么没反应，
-这些都写在 [语法高亮与代码块](/blog/3-code-blocks-guide) 里。
+这些都写在[语法高亮与代码块](/blog/3-code-blocks-guide)里。
 
 ## 小结
 
