@@ -112,6 +112,14 @@ function Sidebar({ items }: { items: TocItem[] }) {
 
   // 侧栏自身也可能超长（展开多个分组后），需要能被滚动到可视区
   const navRef = useRef<HTMLElement>(null);
+  // WinUI3 式滑动指示条，整棵目录只有这一条
+  const indicatorRef = useRef<HTMLSpanElement>(null);
+  // 指示条追踪状态放在 ref 里：快速连点会让下面的 effect 频繁重启，
+  // 状态跨重启保留，才不会每次都当成「首次定位」重新触发果冻拉伸
+  const indicatorPosRef = useRef<{ top: number; height: number }>({
+    top: Number.NaN,
+    height: Number.NaN,
+  });
 
   /**
    * 正在等待收起的旧章节。
@@ -183,6 +191,91 @@ function Sidebar({ items }: { items: TocItem[] }) {
   }, [activeId, manualId]);
 
   /**
+   * 滑动指示条的位置追踪。
+   *
+   * 位置不能只在 activeId 变化时量一次：切换章节时分组会展开/收起，
+   * 250ms 的高度过渡里后面的条目一直在挪。所以起一个 rAF 循环追着量，
+   * 目标位置连续几帧不动了才收工——过渡期间指示条被平滑地拽到新位置。
+   *
+   * 快速连点的打断：CSS transition 本来就会从「当前渲染位置」重新出发，
+   * 这里要配合的是别再添乱——上一目标位置存在 indicatorPosRef 里跨重启
+   * 保留，果冻拉伸只在真正的章节跳跃（≥ JELLY_MIN_DELTA）时触发，
+   * 布局微调带来的几像素漂移直接平移过去，不会一惊一乍地甩。
+   */
+  useEffect(() => {
+    const nav = navRef.current;
+    const indicator = indicatorRef.current;
+    if (!nav || !indicator) return;
+
+    const PILL_HEIGHT = 16; // 与旧版 h-4 一致：文字折行时条也不会跟着变长
+    // 覆盖「待收起延迟 290ms + 收起过渡 250ms」的完整布局变化期
+    const SETTLE_MS = 700;
+    // 小于这个距离的移动视为布局微调，不触发果冻拉伸
+    const JELLY_MIN_DELTA = 24;
+    let raf = 0;
+    let stableFrames = 0;
+    const start = performance.now();
+
+    /** 返回 true 表示位置已稳定，循环可以停了 */
+    const measure = () => {
+      const anchor = nav.querySelector<HTMLElement>(
+        'a[aria-current="location"]',
+      );
+      if (!anchor) {
+        indicator.style.opacity = "0";
+        return true;
+      }
+      const navRect = nav.getBoundingClientRect();
+      const rect = anchor.getBoundingClientRect();
+      const height = Math.min(rect.height, PILL_HEIGHT);
+      // 指示条绝对定位在 nav 的内容坐标系里，要补上滚动量，
+      // 这样侧栏自身滚动时它跟着内容走
+      const top =
+        rect.top - navRect.top + nav.scrollTop + (rect.height - height) / 2;
+
+      const prev = indicatorPosRef.current;
+      if (top !== prev.top || height !== prev.height) {
+        const delta = Number.isNaN(prev.top) ? 0 : top - prev.top;
+        const stretch =
+          Math.abs(delta) >= JELLY_MIN_DELTA
+            ? Math.min(Math.abs(delta) * 0.35, 10)
+            : 0;
+        indicator.style.opacity = "1";
+        indicator.style.top = `${top}px`;
+        indicator.style.height = `${height + stretch}px`;
+        indicatorPosRef.current = { top, height };
+        stableFrames = 0;
+        return false;
+      }
+      // 目标不再动了，把上一帧垫高的部分收回到标准高度
+      if (stableFrames === 0 && indicator.style.height !== `${height}px`) {
+        indicator.style.height = `${height}px`;
+      }
+      stableFrames += 1;
+      return stableFrames >= 4;
+    };
+
+    const tick = () => {
+      if (performance.now() - start > SETTLE_MS || measure()) return;
+      raf = requestAnimationFrame(tick);
+    };
+
+    // 首帧先摆到位、再开过渡：不从 (0,0) 滑过来，也不跟首帧抢动画
+    raf = requestAnimationFrame(() => {
+      measure();
+      indicator.setAttribute("data-ready", "");
+      raf = requestAnimationFrame(tick);
+    });
+
+    // 窗口宽度变化会让文字重新折行，所有位置失效，重测一轮
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, [activeId, manualId, closingId]);
+
+  /**
    * 点击目录项：拦截原生锚点跳转，改用缓动滚动。
    *
    * 原生跳转是瞬间到位的长距离传送，眼睛跟不上；缓动滚动能让读者
@@ -237,6 +330,10 @@ function Sidebar({ items }: { items: TocItem[] }) {
         本文目录
       </p>
 
+      {/* 当前项的指示条：整棵目录只有这一条，高亮换人时从旧位置滑过去
+          （WinUI3 导航栏的做法），不再是各自长出来又缩回去。 */}
+      <span ref={indicatorRef} aria-hidden className="toc-indicator" />
+
       <ul className="space-y-0.5">
         {tree.map((node) => {
           const open = isOpen(node);
@@ -257,16 +354,16 @@ function Sidebar({ items }: { items: TocItem[] }) {
                       : "text-secondary hover:text-foreground"
                   }`}
                 >
-                  {/* 指示条只挂在当前项上：短（不贯穿整棵树）且粗（2px）。
-                      绝对定位在 left-0，文字从 pl-4 开始，两者留出 14px 间距。 */}
-                  <span
-                    aria-hidden
-                    className={`absolute left-0 top-1/2 w-[2px] -translate-y-1/2 rounded-full transition-all duration-200 ${
-                      active
-                        ? "h-4 bg-accent"
-                        : "h-0 bg-transparent group-hover:h-2 group-hover:bg-border"
-                    }`}
-                  />
+                  {/* 悬停时的灰色小短条。当前项的蓝色指示条全目录只有一条
+                      （见上面的 .toc-indicator），由滑动动画在条目间移动；
+                      当前项自己不渲染灰条——悬停时蓝条正压在这个位置，
+                      再叠一条灰的会把蓝条拦腰盖住。 */}
+                  {!active && (
+                    <span
+                      aria-hidden
+                      className="absolute left-0 top-1/2 h-0 w-[2px] -translate-y-1/2 rounded-full bg-transparent transition-all duration-200 group-hover:h-2 group-hover:bg-border"
+                    />
+                  )}
                   {node.text}
                 </a>
 
@@ -356,16 +453,15 @@ function Sidebar({ items }: { items: TocItem[] }) {
                             : "text-secondary hover:text-foreground"
                         }`}
                       >
-                        {/* 子项指示条与父级对齐在同一条基线上（left-0），
-                            靠 pl-7 的更大缩进体现层级 */}
-                        <span
-                          aria-hidden
-                          className={`absolute left-0 top-1/2 w-[2px] -translate-y-1/2 rounded-full transition-all duration-200 ${
-                            activeId === child.id
-                              ? "h-4 bg-accent"
-                              : "h-0 bg-transparent group-hover:h-2 group-hover:bg-border"
-                          }`}
-                        />
+                        {/* 子项的悬停灰条与父级对齐在同一条基线上（left-0），
+                            靠 pl-7 的更大缩进体现层级；当前项不渲染，
+                            避免灰条盖住蓝指示条 */}
+                        {activeId !== child.id && (
+                          <span
+                            aria-hidden
+                            className="absolute left-0 top-1/2 h-0 w-[2px] -translate-y-1/2 rounded-full bg-transparent transition-all duration-200 group-hover:h-2 group-hover:bg-border"
+                          />
+                        )}
                         {child.text}
                       </a>
                     </li>

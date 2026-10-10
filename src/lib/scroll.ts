@@ -82,6 +82,10 @@ function unlock() {
 /** 是否正在执行程序化滚动（此时忽略 scroll 事件） */
 let programmatic = false;
 
+/** 当前缓动动画的代次与 rAF 句柄：新滚动开始时自增并取消旧帧 */
+let scrollGeneration = 0;
+let scrollRaf = 0;
+
 /**
  * 用户在锁定期间自己滚动了，就解锁，让高亮恢复跟随。
  *
@@ -127,7 +131,21 @@ function easeScrollTo(targetTop: number, lockId: string | null): void {
 
   let startTime: number | null = null;
 
+  /*
+   * 先打断上一次还在飞的缓动。
+   *
+   * 不打断的话两个动画循环会同时写 scrollY：这一帧谁后注册谁赢，
+   * 看起来像新的接管了旧的——但时长按距离算，第二次点击如果更近，
+   * 新动画先跑完收工，旧循环还没结束，就会继续把页面往旧目标拉，
+   * 表现为「往第一次点击的小节回弹一小段」。
+   * 代次号让旧动画帧一睁眼就知道自己已被接替，直接退出。
+   */
+  cancelAnimationFrame(scrollRaf);
+  const generation = ++scrollGeneration;
+
   const step = (timestamp: number) => {
+    if (generation !== scrollGeneration) return;
+
     if (startTime === null) startTime = timestamp;
     const elapsed = timestamp - startTime;
     const progress = Math.min(1, elapsed / duration);
@@ -135,7 +153,7 @@ function easeScrollTo(targetTop: number, lockId: string | null): void {
     window.scrollTo(0, start + distance * easeOutCubic(progress));
 
     if (progress < 1) {
-      requestAnimationFrame(step);
+      scrollRaf = requestAnimationFrame(step);
     } else {
       /*
        * 动画结束后**不**解锁。
@@ -150,7 +168,7 @@ function easeScrollTo(targetTop: number, lockId: string | null): void {
   };
 
   programmatic = true;
-  requestAnimationFrame(step);
+  scrollRaf = requestAnimationFrame(step);
 }
 
 export function scrollToAnchor(anchorId: string): void {

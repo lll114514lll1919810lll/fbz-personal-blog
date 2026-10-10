@@ -2050,6 +2050,27 @@ html {
   will-change: grid-template-rows;
 }
 
+/* WinUI3 式的滑动指示条：整棵目录只有一条，高亮换人时从旧位置滑过去
+   （见 table-of-contents.tsx 里量取位置的 effect）。
+   left 对齐条目内容区的左缘：nav 的 p-3 意味着锚点的 left-0 落在这里。 */
+.toc-indicator {
+  position: absolute;
+  left: 0.75rem;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.toc-indicator[data-ready] {
+  opacity: 1;
+  transition:
+    top 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 150ms linear;
+}
+
 /* ============================================================================
    动效：尊重系统的「减少动态效果」设置
    ========================================================================= */
