@@ -4,7 +4,8 @@ import { AdminDashboard } from "@/components/admin-dashboard";
 /**
  * 评论管理后台：/admin
  *
- * 和登录页一样不设入口、禁止收录。
+ * 禁止收录。入口不给访客：登录之后底栏才会出现一个「后台」链接
+ * （见 components/admin-entry.tsx），未登录时的地址只能靠记住。
  *
  * 注意：页面本身是静态导出的 HTML，任何人都能打开这个地址；
  * 真正的门在 /api/admin/* 上——未登录时接口一律 401，

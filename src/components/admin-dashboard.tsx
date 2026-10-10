@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AdminBadge } from "@/components/admin-badge";
+import { notifyAdminSessionChanged } from "@/lib/admin-session";
 import { absoluteTime, relativeTime } from "@/lib/time";
 
 /**
@@ -264,6 +265,8 @@ export function AdminDashboard() {
 
   async function logout() {
     await fetch("/api/admin/session", { method: "DELETE" }).catch(() => {});
+    // Cookie 已清掉，让底栏的后台入口跟着消失（底栏在根布局里不会重新挂载）
+    notifyAdminSessionChanged();
     router.replace("/adminlogin");
   }
 

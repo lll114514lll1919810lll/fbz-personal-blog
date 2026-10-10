@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CONTENT_MAX_WIDTH, LICENSE, navLinks, siteConfig } from "@/lib/site";
+import { AdminEntry } from "@/components/admin-entry";
 import { LinkPending } from "@/components/link-pending";
 import { SiteLogo } from "@/components/site-logo";
 import { SiteSearch } from "@/components/site-search";
@@ -151,6 +152,15 @@ export function SiteFooter() {
               <LinkPending>实验室</LinkPending>
             </Link>
           </span>
+
+          {/* 后台入口紧跟在实验室后面，同样是一个「页面」性质的短项。
+              只有已登录的管理员才渲染（组件内部探测），访客看到的是空白，
+              所以它的有无不影响上面那几项的排布。
+
+              放在这里而不是顶栏：顶栏那四个链接对应站点的四类内容，后台是
+              站点管理，不属于其中任何一类；而底栏右端本来就是「元信息」区，
+              内容/源码/实验室都在这儿。 */}
+          <AdminEntry />
         </p>
       </div>
     </footer>

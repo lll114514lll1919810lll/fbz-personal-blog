@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { notifyAdminSessionChanged } from "@/lib/admin-session";
 
 /**
  * 管理员登录表单。
@@ -10,8 +11,8 @@ import { useRef, useState } from "react";
  * 前端**不接触也不存储任何令牌**——这是不用 localStorage 的原因：
  * localStorage 里的东西任何 XSS 都能读走，HttpOnly Cookie 读不到。
  *
- * 这个页面刻意没有任何入口链接（导航栏、页脚都不放），
- * 只能靠记住地址访问。
+ * 这个页面自己没有任何入口链接（导航栏、页脚都不放），只能靠记住地址访问；
+ * 登录成功之后，底栏才会多出一个通往 /admin 的「后台」入口。
  */
 export function AdminLogin() {
   const router = useRouter();
@@ -49,6 +50,8 @@ export function AdminLogin() {
       }
 
       setKey("");
+      // Cookie 刚写入，让底栏的后台入口立刻出现（底栏在根布局里不会重新挂载）
+      notifyAdminSessionChanged();
       router.push("/admin");
       // 刷新一次让服务端组件也拿到最新登录态（Cookie 刚写入）
       router.refresh();
