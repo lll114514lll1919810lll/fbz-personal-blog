@@ -50,87 +50,153 @@ export default function AboutPage() {
         </div>
       </header>
 
-      {/* max-w-[42rem] 把正文约束在约 40 字/行：中文长文超过 45 字就容易串行。
-            max-w-none 会让 prose 铺满整个容器，宽屏下行长失控。 */}
-      <div className="panel panel-strong prose max-w-3xl px-6 py-7 sm:px-10 sm:py-9">
-        <p>
-          你好，我是 <strong>{siteConfig.author}</strong>。这里是{siteConfig.name}
-          ，用来存放我的技术笔记、思考和随手记录。
-        </p>
+      {/* 「品」字布局：介绍面板在左，鸣谢面板在右，两块同款等宽；窄屏时鸣谢
+          回落到下方。滚动时鸣谢面板吸在顶栏下面。 */}
+      <div className="grid gap-10 sm:gap-12 lg:grid-cols-2 lg:items-start">
+        {/* max-w-[42rem] 把正文约束在约 40 字/行：中文长文超过 45 字就容易串行。
+              max-w-none 会让 prose 铺满整个容器，宽屏下行长失控。 */}
+        <div className="panel panel-strong prose max-w-3xl px-6 py-7 sm:px-10 sm:py-9">
+          <p>
+            你好，我是 <strong>{siteConfig.author}</strong>。这里是{siteConfig.name}
+            ，用来存放我的技术笔记、思考和随手记录。
+          </p>
 
-        <h2>这个博客怎么写的</h2>
-        <ul>
-          <li>
-            <strong>技术栈</strong>：Next.js 16（App Router）+ TypeScript +
-            Tailwind CSS v4
-          </li>
-          <li>
-            <strong>内容格式</strong>：MDX。写文章就是新建{" "}
-            <code>src/content/</code> 下的{" "}
-            <code>.mdx</code> 文件，不需要数据库
-          </li>
-          <li>
-            <strong>构建方式</strong>：构建时预渲染成静态 HTML，访问速度快，对搜索引擎友好
-          </li>
-          <li>
-            <strong>阅读体验</strong>：文章带目录、阅读进度条和上下篇导航，明暗配色跟随系统
-          </li>
-        </ul>
+          <h2>这个博客怎么写的</h2>
+          <ul>
+            <li>
+              <strong>技术栈</strong>：Next.js 16（App Router）+ TypeScript +
+              Tailwind CSS v4
+            </li>
+            <li>
+              <strong>内容格式</strong>：MDX。写文章就是新建{" "}
+              <code>src/content/</code> 下的{" "}
+              <code>.mdx</code> 文件，不需要数据库
+            </li>
+            <li>
+              <strong>构建方式</strong>：构建时预渲染成静态 HTML，访问速度快，对搜索引擎友好
+            </li>
+            <li>
+              <strong>阅读体验</strong>：文章带目录、阅读进度条和上下篇导航，明暗配色跟随系统
+            </li>
+          </ul>
 
-        <h2>转载与引用</h2>
-        <p>
-          这个站分两部分授权。<strong>主题代码</strong>用{" "}
-          <a href={LICENSE.codeUrl} target="_blank" rel="noreferrer">
-            AGPL-3.0
-          </a>
-          ：可以改、可以商用，但衍生作品要同样开源，并且通过网络提供服务时
-          要把源码给使用者；<strong>文章正文</strong>用{" "}
-          <a href={LICENSE.contentUrl} target="_blank" rel="noreferrer">
-            CC BY-NC-SA 4.0
-          </a>
-          ，转载和翻译都欢迎，但要署名、不能商用，改了再发得沿用同一协议。
-        </p>
-        <p>
-          代码用 AGPL 是被一个依赖带过来的：本站的液态玻璃用了{" "}
-          <a
-            href="https://github.com/martin65536/liquid-glass-webgl"
-            target="_blank"
-            rel="noreferrer"
-          >
-            liquid-glass-webgl
-          </a>
-          （AGPL-3.0），它要求整个服务向使用者提供源码，所以整站源码一并按
-          AGPL 走。完整的源码在{" "}
-          <a href={siteConfig.repo} target="_blank" rel="noreferrer">
-            仓库
-          </a>
-          ，文章内容的细节写在{" "}
-          <a
-            href={`${siteConfig.repo}/blob/main/CONTENT-LICENSE.md`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            CONTENT-LICENSE.md
-          </a>
-          {" "}。文章里自己写的代码片段可以当 MIT 用，直接拿去即可——但摘录自上面那个第三方组件的代码不在此列。
-        </p>
+          <h2>转载与引用</h2>
+          <p>
+            这个站分两部分授权。<strong>主题代码</strong>用{" "}
+            <a href={LICENSE.codeUrl} target="_blank" rel="noreferrer">
+              AGPL-3.0
+            </a>
+            ：可以改、可以商用，但衍生作品要同样开源，并且通过网络提供服务时
+            要把源码给使用者；<strong>文章正文</strong>用{" "}
+            <a href={LICENSE.contentUrl} target="_blank" rel="noreferrer">
+              CC BY-NC-SA 4.0
+            </a>
+            ，转载和翻译都欢迎，但要署名、不能商用，改了再发得沿用同一协议。
+          </p>
+          <p>
+            代码用 AGPL 是被一个依赖带过来的：本站的液态玻璃用了{" "}
+            <a
+              href="https://github.com/martin65536/liquid-glass-webgl"
+              target="_blank"
+              rel="noreferrer"
+            >
+              liquid-glass-webgl
+            </a>
+            （AGPL-3.0），它要求整个服务向使用者提供源码，所以整站源码一并按
+            AGPL 走。完整的源码在{" "}
+            <a href={siteConfig.repo} target="_blank" rel="noreferrer">
+              仓库
+            </a>
+            ，文章内容的细节写在{" "}
+            <a
+              href={`${siteConfig.repo}/blob/main/CONTENT-LICENSE.md`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              CONTENT-LICENSE.md
+            </a>
+            {" "}。文章里自己写的代码片段可以当 MIT 用，直接拿去即可——但摘录自上面那个第三方组件的代码不在此列。
+          </p>
 
-        <h2>关于我</h2>
-        <p>
-          一个热爱技术与 AI 、喜欢分享的普通人。你可以在{" "}
-          <a
-            href={siteConfig.github}
-            target="_blank"
-            rel="noreferrer"
-          >
-            GitHub
-          </a>{" "}
-          找到我。
-        </p>
+          <h2>关于我</h2>
+          <p>
+            一个热爱技术与 AI 、喜欢分享的普通人。你可以在{" "}
+            <a
+              href={siteConfig.github}
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub
+            </a>{" "}
+            找到我。
+          </p>
 
-        <blockquote>
-          <p>风不止，但行有恒。</p>
-        </blockquote>
+          <blockquote>
+            <p>风不止，但行有恒。</p>
+          </blockquote>
+        </div>
+
+        {/* 鸣谢面板：与左侧介绍面板同一套面板和排版类，等宽等样式。 */}
+        <aside className="panel panel-strong prose max-w-3xl px-6 py-7 sm:px-10 sm:py-9 lg:sticky lg:top-20">
+          <h2>鸣谢</h2>
+          <p>
+            这个站站在许多开源项目的肩膀上，谢谢它们。
+          </p>
+          <ul>
+              <li>
+                <strong>框架</strong>：
+                <a href="https://nextjs.org" target="_blank" rel="noreferrer">Next.js</a>、
+                <a href="https://react.dev" target="_blank" rel="noreferrer">React</a>、
+                <a href="https://tailwindcss.com" target="_blank" rel="noreferrer">Tailwind CSS</a>
+              </li>
+              <li>
+                <strong>内容管线</strong>：
+                <a href="https://mdxjs.com" target="_blank" rel="noreferrer">MDX</a>、
+                <a href="https://github.com/remarkjs/remark-gfm" target="_blank" rel="noreferrer">remark-gfm</a>、
+                <a href="https://github.com/rehypejs/rehype-slug" target="_blank" rel="noreferrer">rehype-slug</a>、
+                <a href="https://rehype-pretty.pages.dev" target="_blank" rel="noreferrer">rehype-pretty-code</a>
+                （代码高亮，底层是{" "}
+                <a href="https://shiki.style" target="_blank" rel="noreferrer">Shiki</a>
+                ）、
+                <a href="https://github.com/Flet/github-slugger" target="_blank" rel="noreferrer">github-slugger</a>
+              </li>
+              <li>
+                <strong>液态玻璃</strong>：渲染器和 shader 原样取自{" "}
+                <a
+                  href="https://github.com/martin65536/liquid-glass-webgl"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  liquid-glass-webgl
+                </a>
+                （AGPL-3.0，上游灵感来自{" "}
+                <a
+                  href="https://github.com/Kyant0/AndroidLiquidGlass"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Kyant0/AndroidLiquidGlass
+                </a>
+                ）；超长文章面板的 SVG 滤镜路线照{" "}
+                <a
+                  href="https://github.com/shuding/liquid-glass"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  shuding/liquid-glass
+                </a>
+                （MIT）的思路重写。来源、协议和改动记录在{" "}
+                <a
+                  href={`${siteConfig.repo}/blob/main/src/components/liquid-glass/README.md`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  liquid-glass/README.md
+                </a>
+                {" "}。
+              </li>
+          </ul>
+        </aside>
       </div>
     </div>
   );

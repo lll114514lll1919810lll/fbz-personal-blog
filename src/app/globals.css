@@ -1327,6 +1327,12 @@ html {
   font-size: 1.4rem;
 }
 
+/* h2 作为整块 prose 的开头时（如关于页鸣谢面板），它承担的是块标题而不是
+   小节分隔，顶着 2.6em 的段前距会让面板顶部空出一截。 */
+.prose > h2:first-child {
+  margin-top: 0;
+}
+
 .prose h3 {
   margin-top: 2.1em;
   margin-bottom: 0.8em;
