@@ -1,7 +1,9 @@
 # 风不止的个人博客
 
-一个使用 Next.js、TypeScript、Tailwind CSS 和 MDX 搭建的中文个人博客，
-页面静态导出后部署在 Cloudflare Pages，评论走 Pages Functions + D1。
+基于 [FlowyBlog Framework](https://github.com/lll114514lll1919810lll/flowyblog-framework) 搭建的个人博客，
+是这个框架的一个实践站点。页面静态导出后部署在 Cloudflare Pages，
+评论走 Pages Functions + D1；框架、样式与实验室功能随框架迭代，本仓库
+主要维护文章内容与站点配置。
 
 ## 快速开始
 
