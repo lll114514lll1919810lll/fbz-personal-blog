@@ -8,6 +8,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+# 维护内容
+
+本站主要维护文章内容与站点配置；外观、框架的更改尽量交给 [FlowyBlog Framework](https://github.com/lll114514lll1919810lll/flowyblog-framework) 仓库处理。
+
 # 授权约束
 
 本站源码是 **AGPL-3.0**（根目录 `LICENSE`），文章正文是 CC BY-NC-SA 4.0。
