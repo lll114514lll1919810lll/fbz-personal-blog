@@ -104,7 +104,7 @@
   --radius-panel: 14px;
 
   /* 浅色和深色主题使用独立背景资源，便于后续分别替换 */
-  --bg-image: url("/background-light.png");
+  --bg-image: var(--bg-image-light);
   /* 背景薄纱：亮色图是中间调（中位亮度 0.427），深色文字直接压上去会糊，
      盖一层 50% 白把图压成纹理，文字才稳。与图同为 fixed，一起滚动。
      深色主题不需要（那边图本身够暗，实测文字对比度已达标）。 */
@@ -162,7 +162,7 @@
     --panel-border: rgb(255 255 255 / 0.09);
     --panel-highlight: rgb(255 255 255 / 0.06);
     --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
-    --bg-image: url("/background-dark.png");
+    --bg-image: var(--bg-image-dark);
   --bg-scrim: none;
     --bg-scrim: none;
     /* 背景图一开，没有底色的文字就必须描边：图里任何位置都可能是亮的，
@@ -211,7 +211,7 @@
   --panel-border: rgb(255 255 255 / 0.09);
   --panel-highlight: rgb(255 255 255 / 0.06);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
-  --bg-image: url("/background-dark.png");
+  --bg-image: var(--bg-image-dark);
   --bg-scrim: none;
   /* 与上面媒体查询块里那份逐字一致，改一处必须改两处 */
   --text-outline:
@@ -824,8 +824,9 @@
   /* ==========================================================================
      站点标识（顶栏左上角）
 
-     占位形态：32px 圆形底 + 站名首字。等有正式 logo 就把里面的文字换成
-     图片（见 components/site-logo.tsx 的说明），圆形裁切由这里负责。
+     两种形态共用这个类（见 components/site-logo.tsx）：默认是 32px
+     圆形底 + 站名首字的纯 CSS 形态；siteConfig.logo 填了图片路径时
+     同一个类落在 <img> 上，靠 object-fit: cover 做圆形裁切。
 
      配色和明暗切换开关的滑块同一套逻辑：底色用 --foreground、字用
      --background，两套主题下都是最高对比，且不引入新颜色。
@@ -834,12 +835,18 @@
      ========================================================================== */
 
   .site-logo-badge {
-    display: block;
+    display: grid;
+    place-items: center;
     width: 2rem; /* 32px */
     height: 2rem;
-    place-items: center;
     border-radius: 999px;
+    /* 图片形态：撑满并按圆形裁切。对文字形态无影响 */
     object-fit: cover;
+    background: var(--foreground);
+    color: var(--background);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1;
     /* 一点外阴影，和亚克力面板同一套语言：像一枚贴在玻璃上的圆片 */
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
     transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -2670,7 +2677,7 @@ html {
   --panel-highlight: rgb(34 211 238 / 0.06);
   --panel-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -14px rgb(0 0 0 / 0.5);
   /* 专用壁纸：霓虹隧道（青 + 品红，75% 以上近黑），不与默认深色主题共用 */
-  --bg-image: url("/background-cyberpunk.png");
+  --bg-image: var(--bg-image-cyberpunk);
   --bg-scrim: none;
   --text-outline:
     0.5px 0 rgb(0 0 0 / 0.5), -0.5px 0 rgb(0 0 0 / 0.5),

@@ -89,8 +89,8 @@ export function SiteFooter() {
         {/* 授权声明放在页脚而不是关于页：转载的人通常只翻到这个站最底部，
             才会去找「能不能转」的答案。写在这里，被爬到的概率最高。
 
-            两条拆成两个链接而不是拼成一串：读者多半只关心自己那一档
-            （想拿源码？点 AGPL；想转文章？点 CC），分开点更省事。
+            「内容」条目仅在站主声明了内容授权（site.ts 里 LICENSE.content
+            非空）时出现；留空表示暂不声明，页脚就不显示这一项。
 
             「源码」这条链的是仓库而不是协议正文：AGPL 第 13 条要求向网络
             使用者提供完整源码，指向仓库才算履行，只链一份协议全文不算。
@@ -98,17 +98,19 @@ export function SiteFooter() {
             文字写「内容 / 源码」而不是「文章 / 代码」：
             页脚一行放不下长句子，短词在 320px 上也不会折行。 */}
         <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <span className="whitespace-nowrap">
-            内容 ·{" "}
-            <a
-              href={LICENSE.contentUrl}
-              target="_blank"
-              rel="noreferrer license"
-              className="transition-colors hover:text-foreground"
-            >
-              {LICENSE.content}
-            </a>
-          </span>
+          {LICENSE.content && (
+            <span className="whitespace-nowrap">
+              内容 ·{" "}
+              <a
+                href={LICENSE.contentUrl}
+                target="_blank"
+                rel="noreferrer license"
+                className="transition-colors hover:text-foreground"
+              >
+                {LICENSE.content}
+              </a>
+            </span>
+          )}
           <span className="whitespace-nowrap">
             源码 ·{" "}
             <a

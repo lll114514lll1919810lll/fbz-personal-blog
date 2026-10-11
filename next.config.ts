@@ -41,9 +41,24 @@ const withMDX = createMDX({
  */
 const isStaticExport = process.env.NEXT_OUTPUT === "export";
 
+/**
+ * 子路径部署（GitHub Pages 项目站点等）的 basePath 只有这一个来源：
+ * NEXT_PUBLIC_BASE_PATH 环境变量。CI 里用 github.event.repository.name
+ * 自动派生为 /<仓库名>，fork 或仓库改名后不需要改任何文件；
+ * 本地想模拟子路径时手动设置同名变量即可。不设置就是根路径部署。
+ */
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 const nextConfig: NextConfig = {
   // 让 .md / .mdx 文件可以被 Next.js 当作路由或模块处理
   pageExtensions: ["ts", "tsx", "md", "mdx"],
+
+  ...(basePath
+    ? {
+        basePath,
+        assetPrefix: `${basePath}/`,
+      }
+    : {}),
 
   ...(isStaticExport
     ? {
@@ -65,9 +80,8 @@ const nextConfig: NextConfig = {
          * 这是静态导出的硬性要求：next/image 默认会把 src 改写成
          *   /_next/image/?url=...&w=64&q=75
          * 指向 Next 的优化接口，而那个接口是服务端路由，静态产物里不存在，
-         * 结果是图片静默 404——顶栏 logo 就是这么丢的。开启 unoptimized 后
-         * next/image 直接输出原图路径（/site-logo.jpg），保留 width/height
-         * 防抖动的能力，只是不再做缩放转码。
+         * 结果是图片静默 404。开启 unoptimized 后 next/image 直接输出
+         * 原图路径，保留 width/height 防抖动的能力，只是不再做缩放转码。
          *
          * 注意：只有导出模式才关。也就是说 `pnpm dev` 走优化器、
          * 线上走原图，两者渲染结果不同——这类「本地好好的、线上才坏」的

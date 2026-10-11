@@ -6,6 +6,9 @@ export const siteConfig = {
   name: "风不止的个人博客",
   author: "风不止",
   description: "记录技术、思考与生活。这里是风不止的个人博客。",
+  // 顶栏 logo。留空用「圆形底 + 站名首字」的纯 CSS 形态；填 public 下的
+  // 图片路径（如 "/site-logo.jpg"）则显示圆形裁切的图片。
+  logo: "/site-logo.jpg",
   // 正式域名。Cloudflare Pages 每次推送都会重新构建，
   // 所以改这里之后要 push 才生效。
   url: "https://blog.mclll114.me",
