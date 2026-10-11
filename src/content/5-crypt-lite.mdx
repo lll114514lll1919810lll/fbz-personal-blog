@@ -35,7 +35,7 @@ function makeShift(key, pos) {
 }
 ```
 
-结果是 0 到 255。这个数不直接加在字符上。每个字符先在「安全码点表」里查到自己的下标，移动之后映射回码点，安全表排除了 C0/C1 控制字符（`0x00`–`0x1F`、`0x7F`–`0x9F`）和代理对区间（`0xD800`–`0xDFFF`）。
+结果是 0 到 255。这个数不直接加在字符上。每个字符先在“安全码点表”里查到自己的下标，移动之后映射回码点，安全表排除了 C0/C1 控制字符（`0x00`–`0x1F`、`0x7F`–`0x9F`）和代理对区间（`0xD800`–`0xDFFF`）。
 
 这样算出来的密文不会变成控制字符，复制粘贴和存文件都不受影响。解密反着走一遍。
 
@@ -93,7 +93,7 @@ Android APK 只是套了一层 WebView 壳，本质上就是上面那份 `index.
 Win32 GUI，纯 C，图片交给 GDI+。控件是 owner-draw 自己画的，主题跟随系统，浅色深色两套都有。
 
 <figure className="post-figure">
-  <img src="/images/crypt-lite/02-windows-text.jpg" alt="Windows 版文本加解密界面，深色主题，输入「你好世界!」，输出「儗妠亦庞r」，底部显示加密完成 1 轮次 3 ms" width={1400} height={1050} />
+  <img src="/images/crypt-lite/02-windows-text.jpg" alt="Windows 版文本加解密界面，深色主题，输入“你好世界!”，输出“儗妠亦庞r”，底部显示加密完成 1 轮次 3 ms" width={1400} height={1050} />
   <figcaption>图 2：Windows 版文本页，深色主题下的一组测试输入。</figcaption>
 </figure>
 
