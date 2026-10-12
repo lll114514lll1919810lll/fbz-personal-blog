@@ -17,6 +17,9 @@ import { ThemeToggle } from "@/components/theme-toggle";
  *
  * 圆角去掉是因为通栏条一旦有圆角，四角会露出背景、看着像没铺满；
  * 直角加一条下边框才是「贴到屏幕边缘」该有的样子。
+ *
+ * 通栏右缘到滚动条为止（html 用 overflow-y: scroll 保证滚动条永远在，
+ * 槽位不会被留空成一条底色缝；见 globals.css 中该规则的注释）。
  */
 const BAR = "panel rounded-none border-x-0";
 
@@ -81,6 +84,9 @@ export function SiteFooter() {
         style={{ maxWidth: CONTENT_MAX_WIDTH }}
       >
         <div className="flex flex-col gap-1">
+          {/* 静态导出下这是构建期求值：年份固化为最近一次部署的那年。
+              跨年不重新部署就会显示旧年份——重新发布（push 即重建）即可更新，
+              不值得为它引入一段客户端脚本。 */}
           <p>
             © {new Date().getFullYear()} {siteConfig.author}
           </p>

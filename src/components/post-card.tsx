@@ -1,8 +1,9 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import Image from "next/image";
 import type { CSSProperties } from "react";
 import type { Post } from "@/lib/posts";
 import { formatDate } from "@/lib/date";
+import { withBasePath } from "@/lib/asset-version";
 import { LinkPending } from "@/components/link-pending";
 
 function getPostNumber(slug: string): string {
@@ -123,7 +124,7 @@ export function PostCard({
   return (
     <article className={`group relative ${featured ? "h-full" : ""}`}>
       {/* 用绝对定位的链接铺满整行作为悬停热区，比只让文字可点更好点。
-          tabIndex={-1} 让它不进入 Tab 顺序，键盘用户走下方的真实链接。
+          tabIndex={-1} 让它不进入 Tab 顺序，键盘用户走下方标题上的真实链接。
 
           热区本身是空的可点击区域，没有文字可显示「点击中」状态，
           所以在里面铺一层 LinkPending：导航等待期间整行轻微压暗，
@@ -153,7 +154,9 @@ export function PostCard({
               没有就回退到按 slug 生成的图形封面。 */}
           {post.cover ? (
             <Image
-              src={post.cover}
+              /* withBasePath：静态导出不加 basePath（见 lib/asset-version.ts），
+                  子路径部署（GitHub Pages）下不加这里就是 404 */
+              src={withBasePath(post.cover)}
               alt=""
               fill
               sizes={
@@ -205,11 +208,15 @@ export function PostCard({
         </div>
 
         <h2 className={`text-lg font-semibold leading-snug tracking-tight ${featured ? "text-2xl sm:text-3xl" : ""}`}>
-          <span
+          {/* 标题是真链接：键盘用户 Tab 到这里回车即可打开文章。
+              内容层 pointer-events-none，鼠标点击会穿透到上面的整行热区，
+              所以鼠标路径的行为不变；键盘激活走这条链接，同样带 LinkPending。 */}
+          <Link
+            href={`/blog/${post.slug}`}
             className="transition-colors group-hover:text-accent"
           >
             <LinkPending>{post.title}</LinkPending>
-          </span>
+          </Link>
         </h2>
 
         {post.description && (

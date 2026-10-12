@@ -3,6 +3,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { SearchIcon } from "@/components/search-icon";
+import { useClickOutside } from "@/components/use-click-outside";
 import type { SearchIndex } from "@/lib/search-index";
 import {
   getCachedIndex,
@@ -76,22 +78,23 @@ export function SiteSearch() {
     setActive(0);
   }, []);
 
-  /* 点浮层之外就收起。用 pointerdown：鼠标/触摸/手写笔一套逻辑，
-     且比 click 早一步，避免「点别处先触发那边的行为、浮层才关」的错位 */
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
+  /* 点浮层之外就收起（共享 hook，见 use-click-outside.ts） */
+  useClickOutside(rootRef, open, closePanel);
 
   /* 快捷键聚焦搜索框：「/」或 Ctrl/Cmd + K。输入框里打字时不抢键 */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const el = document.activeElement;
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+      // 输入类控件（含可编辑元素、下拉框）聚焦时不抢键
+      if (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement ||
+        (el instanceof HTMLElement && el.isContentEditable)
+      ) {
+        return;
+      }
+      if (event.defaultPrevented) return;
 
       if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault();
@@ -153,22 +156,7 @@ export function SiteSearch() {
   return (
     <div className="site-search" ref={rootRef}>
       <div className="site-search-pill">
-        <svg
-          className="site-search-icon"
-          width="16"
-          height="16"
-          viewBox="0 0 18 18"
-          fill="none"
-          aria-hidden
-        >
-          <circle cx="8" cy="8" r="5.2" stroke="currentColor" strokeWidth="1.6" />
-          <path
-            d="M12 12l3.4 3.4"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
+        <SearchIcon className="site-search-icon" />
 
         <input
           ref={inputRef}
@@ -233,7 +221,9 @@ export function SiteSearch() {
           {status === "idle" && !tokens.length && (
             <p className="site-search-hint">
               输入关键词搜索文章。多个关键词用空格分隔，全部命中才算匹配。
-              按 / 或 Ctrl K 快速聚焦搜索框<br />
+              按 <kbd className="kbd-inline">/</kbd> 或{" "}
+              <kbd className="kbd-inline">Ctrl</kbd>
+              <kbd className="kbd-inline">K</kbd> 快速聚焦搜索框<br />
               <Link href="/search" className="site-search-hint-link" onClick={closePanel}>
                 直接进入搜索页 →
               </Link>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AdminBadge } from "@/components/admin-badge";
+import { deleteAdminComment, patchAdminBadge } from "@/lib/admin-comments";
 import { notifyAdminSessionChanged } from "@/lib/admin-session";
 import { absoluteTime, relativeTime } from "@/lib/time";
 
@@ -104,9 +105,11 @@ export function AdminDashboard() {
           return;
         }
 
-        const payload = body as Payload;
+        // 运行时收窄而不是盲信断言：后端形状意外时显示空列表/0，
+        // 也好过把 undefined 直接渲染出去
+        const payload = body as Partial<Payload> | null;
         setItems(Array.isArray(payload?.items) ? payload.items : []);
-        setTotal(payload?.total ?? 0);
+        setTotal(typeof payload?.total === "number" ? payload.total : 0);
         setError("");
         setLoading(false);
       } catch {
@@ -199,16 +202,17 @@ export function AdminDashboard() {
   async function remove(id: number) {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/comments?id=${id}`, {
-        method: "DELETE",
-      });
-      if (res.status === 401) {
+      const r = await deleteAdminComment(id);
+      if (r.status === 401) {
         router.replace("/adminlogin");
         return;
       }
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        setError(body?.error || "删除失败");
+      if (r.status === 0) {
+        setError("网络异常，删除失败");
+        return;
+      }
+      if (!r.ok) {
+        setError(r.error || "删除失败");
         return;
       }
 
@@ -216,8 +220,6 @@ export function AdminDashboard() {
       // 删掉当前页最后一条时往前退一页，否则会停在一个空白页
       if (items.length === 1 && offset > 0) setOffset((o) => Math.max(0, o - PAGE_SIZE));
       else setReloadKey((k) => k + 1);
-    } catch {
-      setError("网络异常，删除失败");
     } finally {
       setDeleting(false);
     }
@@ -226,8 +228,9 @@ export function AdminDashboard() {
   /**
    * 开关某条的管理员徽标。
    *
-   * 先改本地 state 再发请求（乐观更新）：这是个开关，点了就该立刻看到
-   * 状态变了；等接口回来再改的话，网络稍慢就有明显的「按下去没反应」。
+   * 请求部分与文章页评论区共用（lib/admin-comments.ts）；这里保留后台的
+   * 状态语义：先改本地 state 再发请求（乐观更新）——这是个开关，点了就该
+   * 立刻看到状态变了；等接口回来再改的话，网络稍慢就有明显的「按下去没反应」。
    * 失败时回滚到原值并把错误显示出来——回滚比「让它看起来还是开着的」
    * 诚实，否则管理员会以为徽标已经挂上，实际线上没有。
    */
@@ -242,26 +245,17 @@ export function AdminDashboard() {
     );
 
     try {
-      const res = await fetch("/api/admin/comments", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, admin_badge: next }),
-      });
+      const r = await patchAdminBadge(id, next);
+      if (r.ok) return;
 
-      if (res.status === 401) {
-        setItems(prev);
-        router.replace("/adminlogin");
-        return;
-      }
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        setItems(prev);
-        setError(body?.error || "徽标设置失败");
-      }
-    } catch {
       setItems(prev);
-      setError("网络异常，徽标设置失败");
+      if (r.status === 401) {
+        router.replace("/adminlogin");
+      } else if (r.status === 0) {
+        setError("网络异常，徽标设置失败");
+      } else {
+        setError(r.error || "徽标设置失败");
+      }
     } finally {
       setBadgeBusy(null);
     }
