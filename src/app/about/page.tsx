@@ -188,15 +188,7 @@ export default function AboutPage() {
                 >
                   shuding/liquid-glass
                 </a>
-                （MIT）的思路重写。来源、协议和改动记录在{" "}
-                <a
-                  href={`${siteConfig.repo}/blob/main/src/components/liquid-glass/README.md`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  liquid-glass/README.md
-                </a>
-                {" "}。
+                （MIT）的思路重写。
               </li>
           </ul>
         </aside>

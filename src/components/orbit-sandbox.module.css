@@ -1,0 +1,142 @@
+/*
+  轨道沙盒样式：容器、玻璃核心球、操作提示。
+  动态部分（卫星、轨迹、瞄准线）全部画在 <canvas> 上，本文件只负责壳与核心球。
+  自定义属性沿用 --hh- 前缀，与 globals.css 里的 --hero-core-* 级联互不干扰。
+  深色令牌三份逐字一致（跟随系统 / 手动深色 / 赛博朋克锁深色），改一处必须同步另外两份。
+*/
+
+:root {
+  /*
+    核心球。浅色下 --foreground 是近黑色，拿它做径向渐变会糊成一团灰，
+    所以浅色单独给一套「亚克力玻璃球」的配色；深色那套见下面三个深色令牌块。
+  */
+  --hh-core-surface: radial-gradient(circle at 35% 28%, rgb(255 255 255 / 0.94), color-mix(in srgb, var(--accent) 7%, transparent) 62%, transparent 100%);
+  --hh-core-border: color-mix(in srgb, var(--accent) 26%, transparent);
+  --hh-core-shadow: 0 10px 24px -16px rgb(0 0 0 / 0.45);
+  --hh-core-shadow-pulse: 0 14px 30px -14px rgb(0 0 0 / 0.5);
+}
+
+/* 深色令牌（第一份）：跟随系统。
+   :not([data-theme="light"]) 保证手动选的浅色能压过深色的系统偏好。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hh-core-surface: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--foreground) 24%, transparent), color-mix(in srgb, var(--foreground) 8%, transparent) 58%, transparent 100%);
+    --hh-core-border: color-mix(in srgb, var(--foreground) 30%, transparent);
+    --hh-core-shadow: 0 12px 34px rgb(0 0 0 / 0.14), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 4%, transparent);
+    --hh-core-shadow-pulse: 0 16px 42px rgb(0 0 0 / 0.18), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+}
+
+/* 深色令牌（第二份）：手动指定。 */
+:root[data-theme="dark"] {
+  --hh-core-surface: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--foreground) 24%, transparent), color-mix(in srgb, var(--foreground) 8%, transparent) 58%, transparent 100%);
+  --hh-core-border: color-mix(in srgb, var(--foreground) 30%, transparent);
+  --hh-core-shadow: 0 12px 34px rgb(0 0 0 / 0.14), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 4%, transparent);
+  --hh-core-shadow-pulse: 0 16px 42px rgb(0 0 0 / 0.18), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+/* 深色令牌（第三份）：实验室 cyberpunk 主题锁定深色配色。 */
+:root[data-lab-cyberpunk="on"] {
+  --hh-core-surface: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--foreground) 24%, transparent), color-mix(in srgb, var(--foreground) 8%, transparent) 58%, transparent 100%);
+  --hh-core-border: color-mix(in srgb, var(--foreground) 30%, transparent);
+  --hh-core-shadow: 0 12px 34px rgb(0 0 0 / 0.14), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 4%, transparent);
+  --hh-core-shadow-pulse: 0 16px 42px rgb(0 0 0 / 0.18), inset 0 0 0 1rem color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.sandbox {
+  position: relative;
+  width: min(100%, 26rem);
+  aspect-ratio: 1 / 0.85;
+  margin-inline: auto;
+  /* 边框同时是卫星消散的物理边界，让它可视可读；
+     用全局 --border 令牌，与站点其他面板的描边一致，不抢眼 */
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/*
+  玻璃核心球：DOM 层叠在画布之上，backdrop-filter 会把从它背后经过的
+  卫星一起模糊，天然形成「隔着一层玻璃」的折射感。
+  用 margin 而非 transform 居中，把 transform 留给呼吸/受击动画。
+  pointer-events 关掉，指针事件全部落在画布上。
+*/
+.core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 6.25rem;
+  height: 6.25rem;
+  margin: -3.125rem 0 0 -3.125rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hh-core-border);
+  border-radius: 999px;
+  background: var(--hh-core-surface);
+  color: var(--foreground);
+  box-shadow: var(--hh-core-shadow);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  animation: core-pulse 4s ease-in-out infinite;
+}
+
+/* 核内的原子矢量图，随核心呼吸轻微摇摆 */
+.atom {
+  width: 5rem;
+  height: 5rem;
+  animation: atom-float 7s ease-in-out infinite;
+}
+
+/* 卫星坠入核心时的受击弹跳；JS 每次先移除再强制 reflow 后重新挂上来重触发 */
+.coreBump {
+  animation: core-bump 0.5s ease-out;
+}
+
+.hint {
+  position: absolute;
+  bottom: 0.4rem;
+  left: 50%;
+  z-index: 3;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  opacity: 0.85;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+/* 发射过一次（或静态模式）后由 JS 标记收起 */
+.hint[data-done="1"] {
+  opacity: 0;
+}
+
+@keyframes core-pulse {
+  0%, 100% { transform: scale(0.98); box-shadow: var(--hh-core-shadow); }
+  50% { transform: scale(1.03); box-shadow: var(--hh-core-shadow-pulse); }
+}
+
+@keyframes core-bump {
+  0% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+@keyframes atom-float {
+  0%, 100% { transform: rotate(-3deg) scale(0.96); }
+  50% { transform: rotate(3deg) scale(1.02); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core,
+  .atom {
+    animation: none;
+  }
+}
