@@ -12,7 +12,7 @@ export const metadata = {
 
 ## 先明确要达成什么
 
-目标很窄：一台内存 8GB 的云服务器，跑一个 0.8B 的小模型，让 Chatbox 这类 OpenAI 兼容客户端能从外网调用，并且调用要带 API Key。
+目标很窄：一台内存 8GB 的云服务器，跑一个 0.8B/2B 的小模型，让 Chatbox 这类 OpenAI 兼容客户端能从外网调用，并且调用要带 API Key。
 
 对应到链路上是四层：
 
@@ -234,6 +234,17 @@ curl -s 127.0.0.1:21434/api/version  # 带 Key 试一次完整链路
 ```
 
 六条命令覆盖我遇到过的全部故障。其中 `ufw status` 值得单独提一句：某些云主机重启后安全组策略会和本机规则打架，看起来"配置都写过了"，实际上又变成全放行或者全拒绝。
+
+## 速度实测
+
+由于空间足够，我又部署了 `qwen3.5:2b` 模型，以下是它在本服务器的输出速度实测：
+
+<figure className="post-figure">
+  <img src="/images/ollama-private-ai-deploy/ollama-speed-test.gif" alt="2b 模型输出速度实测" />
+  <figcaption>图 1：SSH 连接服务器，直接跑 ollama 测试输出速度。</figcaption>
+</figure>
+
+如果仅用于简单的聊天，输出速度还是可以接受的；Agent 工具对这种小参数模型的挑战还是太大了。0.8b 模型输出更快，但降智和复读现象更为严重。
 
 ## 几点实在的体会
 
