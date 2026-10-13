@@ -1,0 +1,248 @@
+export const metadata = {
+  title: "云服务器上跑一个私有 AI：Ollama + 0.8B 模型的部署与排查记录",
+  date: "2026-10-13",
+  publishedAt: "2026-10-13T21:30",
+  description: "在云服务器上用 Snap 版 Ollama 跑 0.8B 模型，套一层 Nginx 做鉴权对外提供 OpenAI 兼容接口的完整过程：模型下载卡死、外网 403、CORS、上下文长度，以及重启后 Nginx 起不来这几个坑的实际解法。",
+  tags: ["技术", "AI"],
+}
+
+在云服务器上给自己搭一个能对外访问的 AI 服务，链路比想象中短：Ollama 负责跑模型，Nginx 负责鉴权和挡在前面，云平台的 NAT 和安全组负责把端口放出来。真正花时间的地方不是装软件，而是四件事——模型拉不下来、外网 403、网页客户端跨域、某次重启之后 Nginx 起不来。
+
+这篇按我实际踩的顺序记，每一节只讲一个问题。命令都是当时敲的，版本号写在文里，换发行版或 Ollama 版本时结论可能要重新验证。
+
+## 先明确要达成什么
+
+目标很窄：一台内存 8GB 的云服务器，跑一个 0.8B 的小模型，让 Chatbox 这类 OpenAI 兼容客户端能从外网调用，并且调用要带 API Key。
+
+对应到链路上是四层：
+
+| 层 | 干什么 | 监听 |
+| --- | --- | --- |
+| Ollama | 加载模型、提供 API | 仅 `127.0.0.1:11434` |
+| Nginx | 校验 API Key、转发请求 | 本机 `21434` |
+| 云平台 NAT | 外部端口映射到内部端口 | `10047` → `21434` |
+| 安全组 | 决定谁能连进来 | 放行 `10047` |
+
+Ollama 本身没有 API Key 鉴权。把 `11434` 直接暴露到公网，等于任何人都能免费用你的服务器推理，还能通过 `/api/pull` 往你的磁盘下拉几个 GB 的模型。所以下面所有配置的前提是：**`11434` 只允许本机访问**。
+
+## 空间评估：0.8B 模型没有想象的吃资源
+
+一开始担心磁盘放不下。实际占用是这样：
+
+| 内容 | 大小 |
+| --- | --- |
+| Ollama 程序本体 | 50～100MB |
+| 0.8B 模型（Q4_K_M 量化） | 约 500MB |
+| 建议预留磁盘 | 2～3GB |
+
+留 2～3GB 是为了下载中断留下的缓存和以后加模型。这台机器 8GB 内存跑 0.8B 很轻松，推理时的主要瓶颈在 CPU。
+
+## 安装：Snap 版和普通 systemd 版不通用
+
+官方一键脚本和 Snap 都能装。我装的是 Snap：
+
+```bash
+sudo snap install ollama
+```
+
+选 Snap 之前要知道它和常见部署方式的差别：配置不能用 `sed` 改 `EnvironmentFile`，要写 `snap set`；服务状态不看 `systemctl status ollama`，要看 `snap services ollama`；数据目录在 `/var/snap/ollama/common/` 而不是 `/usr/share/ollama`。后面每一条命令都带着这个前提。
+
+## 坑一：模型下载到 100% 之后一直卡住
+
+**现象**：`ollama run hf.co/...` 从 HuggingFace 拉模型，进度条走完之后不动了，界面上没有报错。
+
+跟着日志看，两分钟就定位到问题：
+
+```bash
+sudo snap logs ollama -f
+# stalled; retrying...
+```
+
+`stalled` 就是传输停滞在反复重试。国内直连 HuggingFace 本来就不稳定，预签名 URL 又带时效，重试到过期就一直卡着。
+
+**解法一（推荐）**：从 `hf-mirror.com` 这类镜像站手动下 `.gguf` 文件到服务器，再用 Modelfile 导入本地文件。这样下载走浏览器或 `wget`，断了重跑就行，和 Ollama 的下载状态彻底解耦。
+
+```bash
+echo "FROM ./Qwen3.5-0.8B-Q4_K_M.gguf" > Modelfile
+ollama create qwen3.5-0.8b -f Modelfile
+```
+
+导入后模型叫 `qwen3.5-0.8b`，是我自己起的名字，客户端里填的就是它。
+
+**解法二**：如果一定要用 `curl` 拉预签名 URL，整个 URL 必须用单引号包住。这种 URL 里有 `?` 和 `&`，不加引号会被 Shell 当成后台符号截断，请求发出去就是 403 或者参数丢失。再配上 `-L` 跟随重定向和 `--retry` 处理断流：
+
+```bash
+curl -L --retry 5 --retry-delay 3 -o model.gguf 'https://镜像域名/完整路径?X-Amz-...&X-Amz-...'
+```
+
+## 坑二：NAT 和安全组都要放行，只配一个不够
+
+端口这条链路是 `10047 → 21434 → 11434`。云平台控制台里两步：
+
+1. NAT 转发：外部端口 `10047` 映射到内部端口 `21434`，协议 `tcp`。
+2. 安全组入方向：放行 `10047`。授权对象填自己的固定 IP 最稳，填 `0.0.0.0/0` 就等于把爆破 API Key 的成本交给全网。
+
+服务器本机的防火墙：
+
+```bash
+sudo ufw allow 21434/tcp
+sudo ufw deny 11434/tcp
+```
+
+Nginx 监听的 `21434` 要放行，Ollama 的 `11434` 要明确拒绝——后者是"务必"那一条。配完可以从另一台机器 `nc -vz 公网IP 11434` 验一下，连不上才算对。
+
+## 坑三：本机测试全过，外网一律 403，日志里什么都没有
+
+Nginx 加一层 Bearer Key 校验，思路是 `map` 比对请求头，不匹配就返回 401：
+
+```nginx
+map $http_authorization $is_valid_key {
+    default 0;
+    "Bearer 你配置的密钥" 1;
+}
+
+server {
+    listen 21434;
+
+    location / {
+        error_page 418 = @unauthorized;
+        if ($is_valid_key = 0) { return 418; }
+
+        proxy_pass http://127.0.0.1:11434;
+        proxy_set_header Host 127.0.0.1:11434;   # 关键，见下
+        proxy_read_timeout 300s;
+    }
+
+    location @unauthorized {
+        return 401 '{"error":"invalid api key"}';
+    }
+}
+```
+
+配置写好，在服务器上 `curl 127.0.0.1:21434/api/version` 返回正常；换到外网用公网 IP 访问，同一个 Key 返回 `403 Forbidden`。更麻烦的是 `error.log` 里一行记录都没有——排查方向直接断了。
+
+两个原因叠在一起，缺一个都不容易出现这个"无声 403"：
+
+**第一，`location` 里直接 `return 401` 会走偏。** Nginx 社区有句老话叫 "If is evil"，在 `location` 块里用 `if` 做 handler 级动作，行为取决于配置组合，有时会把预期的 401 变成 403。绕开的办法是借一次内部重定向：`if` 只返回一个没人占用的私有状态码（这里是 418），再由 `error_page` 把它接到 `@unauthorized` 命名 location 里，真正对外返回 401。这样 `if` 不做输出，401 也不会在 `access_log` 里被吞掉。
+
+**第二，`proxy_set_header Host $host;` 会被 Ollama 拒绝。** 用 `$host` 时，外网请求转发给 Ollama 的 Host 头是公网 IP。Ollama 对非本机来源的 Host 会按安全机制拦下，返回 403，而且这个判断在它的 HTTP 层，不写业务日志——这就是日志干净的原因。把它硬编码成本机地址，请求在 Ollama 看来就来自 `127.0.0.1`：
+
+```nginx
+proxy_set_header Host 127.0.0.1:11434;
+```
+
+**第三顺手做的**：删掉默认站点，避免请求在端口撞车时被默认 server 接走。
+
+```bash
+sudo rm /etc/nginx/sites-enabled/default
+```
+
+改完 `sudo nginx -t && sudo systemctl reload nginx`，外网拿到 `{"version":"0.32.14"}`。
+
+回头看这条经验：**403 且日志无记录时，先查 `proxy_set_header Host`，再查默认站点。** 一个"日志里什么都没有"的 403，多半是后端服务自己做的判断。
+
+## 坑四：客户端接入与网页版的跨域
+
+Ollama 自带 OpenAI 兼容接口，Nginx 透传之后客户端直接填就能用：
+
+- Base URL：`http://<你的公网IP>:10047/v1`，**末尾必须带 `/v1`**。少了这段，Chatbox 会把请求发到 `/chat/completions`，404。
+- API Key：Nginx 里配的那个。
+- 模型名：`qwen3.5-0.8b`。
+
+命令行能通，但网页版客户端（包括浏览器里直接 fetch）会被 CORS 拦。原因是 Ollama 默认只允许本机来源。Snap 版改这个用 `snap set`，不是环境变量：
+
+```bash
+sudo snap set ollama origins="*"
+sudo snap restart ollama
+```
+
+`origins="*"` 是把来源限制放开，方便调试。鉴权还在 Nginx 那一层，但配合 HTTP 明文，这已经不是一个适合放敏感内容的服务。要收紧就把 `*` 换成客户端实际域名。
+
+## 日常优化：常驻、上下文、残留缓存
+
+### 让模型常驻
+
+默认闲置 5 分钟模型就卸载，下次请求要重新加载，第一次响应会慢好几秒。0.8B 只占几百 MB，常驻更划算：
+
+```bash
+sudo snap set ollama keep-alive=-1
+sudo snap restart ollama
+```
+
+### 加长上下文
+
+默认上下文 4096 tokens。Snap 版有个麻烦：`OLLAMA_CONTEXT_LENGTH` 这类环境变量没法直接通过 `snap set` 注入。避开这事的办法是用 Modelfile 把参数烧进模型：
+
+```dockerfile
+FROM qwen3.5-0.8b
+PARAMETER num_ctx 8192
+```
+
+```bash
+ollama create qwen3.5-0.8b-8k -f Modelfile
+```
+
+客户端里把模型名换成 `qwen3.5-0.8b-8k` 即可。上下文加长会多占推理时的内存（KV cache 随长度增长），8GB 机器上 8192 是安全区间，再往上建议先观察一轮实际占用。
+
+**这里有个容易误判的点**：新建模型不会复制那 500MB 权重。Ollama 底层是分层存储（和 Docker 镜像一个思路），改参数只加一层几 KB 的配置层，磁盘上看到的仍然是原来那份 blob。所以 `ollama list` 里两个模型不等于两份权重。
+
+### 清理下载失败的半成品
+
+中断的下载会在 blobs 目录留下 `-partial` 文件，`ollama rm` 删不掉它们，只能手动清：
+
+```bash
+sudo ls -lh /var/snap/ollama/common/models/blobs/ | grep partial
+sudo rm -f /var/snap/ollama/common/models/blobs/sha256-<你实际看到的哈希前缀>*
+```
+
+第二条命令的通配符要按上一条的输出填。执行前确认匹配范围只有 partial 文件——这个目录里其余的都是正在使用的模型权重。
+
+## 坑五：某天重启后 Nginx 起不来
+
+服务跑了一段时间，某次重启之后外网调用全部中断。`nginx -t` 直接报错：
+
+```
+open() "/var/log/nginx/error.log" failed (2: No such file or directory)
+```
+
+Nginx 启动阶段就要打开日志文件，目录不存在则整个服务起不来，配置本身没错也没用。云主机上这个目录会消失的场景有几种：镜像初始化或临时目录清理把 `/var/log` 下的内容收走了，磁盘挂载顺序变化让 `/var/log/nginx` 落在没挂好的位置，或者手动清理日志时把目录一起删了。我这次没查出确切原因，只确认了结果是目录缺失。
+
+修复：
+
+```bash
+sudo mkdir -p /var/log/nginx
+sudo touch /var/log/nginx/access.log /var/log/nginx/error.log
+sudo chown -R www-data:adm /var/log/nginx
+sudo chmod 755 /var/log/nginx
+sudo chmod 640 /var/log/nginx/*.log
+sudo nginx -t && sudo systemctl restart nginx
+```
+
+权限那两条别省。Ubuntu 下 Nginx 以 `www-data` 运行，目录属主或权限不对，下一次重启同样起不来。
+
+## 重启后我按这个顺序查
+
+机器重启之后服务不正常，按这条走一遍，比从头排查快：
+
+```bash
+sudo snap services ollama          # Ollama 有没有在跑
+sudo systemctl status nginx        # Nginx 有没有 active
+sudo ls -d /var/log/nginx          # 日志目录还在不在
+df -h                              # 磁盘有没有被 partial 撑满
+sudo ufw status                    # 防火墙规则有没有被重置
+curl -s 127.0.0.1:21434/api/version  # 带 Key 试一次完整链路
+```
+
+六条命令覆盖我遇到过的全部故障。其中 `ufw status` 值得单独提一句：某些云主机重启后安全组策略会和本机规则打架，看起来"配置都写过了"，实际上又变成全放行或者全拒绝。
+
+## 几点实在的体会
+
+网络是第一个障碍，也基本是最麻烦的一个。国内直连 HuggingFace 的失败方式很多样，卡死只是其中一种。手动下 GGUF 再导入这条路径值得优先试，它把下载和推理解耦了。
+
+Nginx 这一层带来的问题比它解决的多。它提供了 Key 鉴权，同时引入 `if` 的行为不确定性和 Host 头这类新问题。好处是这些坑都有明确解法，而且解法可以复用。
+
+安全上我这份配置没有解决的有两件：HTTP 明文传输意味着 API Key 和内容都在网上裸跑，要么上 HTTPS，要么用安全组限制来源 IP；`origins="*"` 又放宽了一层。这台机器上跑的只是公开可获取的小模型，问题不大，但它不适合放任何需要保密的数据。
+
+至于 0.8B 模型本身，得把预期放到正确的位置。它会一本正经地声称自己调用了 TTS——它没有那个能力。资源受限的云服务器上，这类小模型适合简单问答和文本处理，超出这个范围的活它接不住。
+
+从进度条卡住不动，到外网第一次返回 `{"version":"0.32.14"}`，中间大概花了两天，其中四个小时在处理那个没有任何日志的 403。如果你也碰到"本机通、外网 403、日志空白"，先去改 `proxy_set_header Host`，这是我这次最值的一条收获。
