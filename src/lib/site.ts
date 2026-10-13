@@ -60,6 +60,7 @@ export const navLinks = [
   { href: "/blog", label: "文章" },
   { href: "/tags", label: "标签" },
   { href: "/about", label: "关于" },
+  { href: "/settings", label: "设置" },
 ] as const;
 
 /**
