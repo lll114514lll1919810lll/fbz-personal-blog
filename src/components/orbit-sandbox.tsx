@@ -6,8 +6,10 @@ import styles from "./orbit-sandbox.module.css";
 /*
   首页 Hero 的轨道沙盒：
   - 中心是玻璃质感的核心球（DOM + CSS 令牌，主题自适应）；
-  - 按住拖拽发射卫星（方向 = 拖拽方向，速度 = 拖拽距离），拖拽时实时绘制
+  - 鼠标按住拖拽发射卫星（方向 = 拖拽方向，速度 = 拖拽距离），拖拽时实时绘制
     引力弯曲的预测轨迹；轻点一下则在落点直接生成一颗恰好圆轨道的卫星；
+    触摸端改为长按 420ms 进入瞄准态后再拖拽发射，轻点仍可入轨，
+    其余手势不拦截，页面滑动不受影响；
   - 悬停时鼠标是一个弱引力源，可以把卫星的轨道牵偏；
   - 卫星坠入核心会被吞掉（核心弹一下、放出一圈涟漪）；越过画布边界则
     在边界处原地消散（本体冻结淡出、轨迹回缩），不会绕椭圆飘回来；
@@ -33,7 +35,9 @@ const PREDICT_DT = 1 / 240; // 预测积分步长，与真实物理的标称子�
 const PREDICT_STEPS = 1200; // 预测步数，约 5 秒前瞻
 const PREDICT_EVERY = 20; // 每隔多少步落一个预测点（约 60 个点）
 const MOUSE_GRACE_MS = 1200; // 用户发射后鼠标引力的豁免期，保证发射初段与预测轨迹一致
-const STAR_COUNT = 20; // 背景闪烁星点数量（点缀用，宁少勿多）
+const STAR_COUNT = 14; // 背景闪烁星点数量（点缀用，宁少勿多）
+const LP_MS = 420; // 触摸长按进入瞄准态的时长
+const LP_SLOP = 10; // 触摸长按被判定为滑动的位移阈值（px）
 
 type Sat = {
   x: number;
@@ -449,6 +453,17 @@ export function OrbitSandbox() {
       drawRipples(now);
       for (const s of sats) drawSatellite(s, now);
       drawMouseWell();
+      if (lpWait.active && !aim.active) {
+        // 长按等待反馈：圆环随时间扩散、变实，提示快要点亮瞄准态
+        const prog = Math.min((now - lpWait.start) / LP_MS, 1);
+        ctx.strokeStyle = palette.accent;
+        ctx.globalAlpha = 0.15 + 0.35 * prog;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(W / 2 + lpWait.x, H / 2 + lpWait.y, 6 + 14 * prog, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       if (aim.active) drawAim();
     };
 
@@ -513,8 +528,9 @@ export function OrbitSandbox() {
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
 
-    // ---------- 指针交互 ----------
+    // ---------- 指针交互（鼠标 / 触控笔；触摸走下面的长按路径） ----------
     const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
       const p = toCenter(e);
       aim.active = true;
@@ -529,6 +545,7 @@ export function OrbitSandbox() {
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
       const p = toCenter(e);
       mouse.x = p.x;
       mouse.y = p.y;
@@ -539,26 +556,117 @@ export function OrbitSandbox() {
       }
     };
 
+    // 轻点：在落点生成一颗恰好圆轨道的卫星（圆轨道必须完整落在画布内才不会立刻消散）
+    const tapOrbit = (x: number, y: number) => {
+      const r = Math.hypot(x, y);
+      if (r > CORE_R + 12 && r < Math.min(W, H) / 2 - 6) {
+        const c = circularVelocity(x, y);
+        spawn(x, y, c.vx, c.vy, true);
+      }
+    };
+
+    // 从锚点到落点完成一次发射：拖拽 ≥ 8px 沿方向发射，否则按轻点入轨处理
+    const launchFrom = (anchorX: number, anchorY: number, endX: number, endY: number) => {
+      const drag = Math.hypot(endX - anchorX, endY - anchorY);
+      if (drag < 8) {
+        tapOrbit(endX, endY);
+      } else {
+        // 拖拽：沿拖拽方向发射
+        spawn(anchorX, anchorY, (endX - anchorX) * LAUNCH_GAIN, (endY - anchorY) * LAUNCH_GAIN, true);
+      }
+    };
+
     const onPointerUp = (e: PointerEvent) => {
       if (!aim.active) return;
       aim.active = false;
       const p = toCenter(e);
-      const drag = Math.hypot(p.x - aim.ax, p.y - aim.ay);
-      if (drag < 8) {
-        // 轻点：在落点生成一颗恰好圆轨道的卫星（圆轨道必须完整落在画布内才不会立刻消散）
-        const r = Math.hypot(p.x, p.y);
-        if (r > CORE_R + 12 && r < Math.min(W, H) / 2 - 6) {
-          const c = circularVelocity(p.x, p.y);
-          spawn(p.x, p.y, c.vx, c.vy, true);
-        }
-      } else {
-        // 拖拽：沿拖拽方向发射
-        spawn(aim.ax, aim.ay, (p.x - aim.ax) * LAUNCH_GAIN, (p.y - aim.ay) * LAUNCH_GAIN, true);
-      }
+      launchFrom(aim.ax, aim.ay, p.x, p.y);
     };
 
     const onPointerLeave = () => {
       if (!aim.active) mouse.inside = false;
+    };
+
+    // ---------- 触摸：长按瞄准，避免影响页面滑动 ----------
+    // touch-action 用 pan-y 交出滚动权；只有在长按进入瞄准态之后，
+    // 才通过非被动的 touchmove preventDefault 把当前手势的滚动抢回来。
+    let lpTouchId: number | null = null;
+    let lpStartX = 0;
+    let lpStartY = 0;
+    let lpTimer = 0;
+    let lpEngaged = false;
+    const lpWait = { active: false, x: 0, y: 0, start: 0 }; // 长按等待中的扩散圆环
+
+    const lpCancel = () => {
+      window.clearTimeout(lpTimer);
+      lpTouchId = null;
+      lpEngaged = false;
+      lpWait.active = false;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (lpTouchId !== null) return; // 只认第一根手指
+      const t = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      lpTouchId = t.identifier;
+      lpStartX = t.clientX;
+      lpStartY = t.clientY;
+      lpEngaged = false;
+      lpWait.active = true;
+      lpWait.x = t.clientX - rect.left - W / 2;
+      lpWait.y = t.clientY - rect.top - H / 2;
+      lpWait.start = performance.now();
+      lpTimer = window.setTimeout(() => {
+        lpEngaged = true;
+        lpWait.active = false;
+        aim.active = true;
+        aim.ax = lpWait.x;
+        aim.ay = lpWait.y;
+        aim.x = lpWait.x;
+        aim.y = lpWait.y;
+        mouse.inside = false; // 触摸没有悬停引力
+        if ("vibrate" in navigator) navigator.vibrate(30);
+      }, LP_MS);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (lpTouchId === null) return;
+      const t = Array.from(e.changedTouches).find((c) => c.identifier === lpTouchId);
+      if (!t) return;
+      if (!lpEngaged) {
+        // 未触发长按前动得太多 → 是滑动手势，取消等待，滚动交还浏览器
+        if (Math.hypot(t.clientX - lpStartX, t.clientY - lpStartY) > LP_SLOP) lpCancel();
+        return;
+      }
+      e.preventDefault(); // 瞄准中：阻断页面滚动
+      const rect = canvas.getBoundingClientRect();
+      aim.x = t.clientX - rect.left - W / 2;
+      aim.y = t.clientY - rect.top - H / 2;
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (lpTouchId === null) return;
+      const t = Array.from(e.changedTouches).find((c) => c.identifier === lpTouchId);
+      if (!t) return;
+      const wasEngaged = lpEngaged;
+      const startX = lpStartX;
+      const startY = lpStartY;
+      lpCancel();
+      if (wasEngaged && aim.active) {
+        e.preventDefault(); // 阻止合成鼠标事件 / 双击行为
+        aim.active = false;
+        const rect = canvas.getBoundingClientRect();
+        launchFrom(aim.ax, aim.ay, t.clientX - rect.left - W / 2, t.clientY - rect.top - H / 2);
+      } else if (Math.hypot(t.clientX - startX, t.clientY - startY) <= LP_SLOP) {
+        // 快速轻点：与桌面轻点入轨一致
+        const rect = canvas.getBoundingClientRect();
+        tapOrbit(t.clientX - rect.left - W / 2, t.clientY - rect.top - H / 2);
+      }
+    };
+
+    const onTouchCancel = () => {
+      lpCancel();
+      aim.active = false;
     };
 
     if (!reduced) {
@@ -569,6 +677,10 @@ export function OrbitSandbox() {
         aim.active = false;
       });
       canvas.addEventListener("pointerleave", onPointerLeave);
+      canvas.addEventListener("touchstart", onTouchStart, { passive: true });
+      canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+      canvas.addEventListener("touchend", onTouchEnd);
+      canvas.addEventListener("touchcancel", onTouchCancel);
       seed();
       if (inView) start();
     } else {
@@ -580,6 +692,7 @@ export function OrbitSandbox() {
     return () => {
       stop();
       window.clearTimeout(coreBumpTimer);
+      window.clearTimeout(lpTimer);
       io.disconnect();
       ro.disconnect();
       themeObserver.disconnect();
@@ -588,6 +701,10 @@ export function OrbitSandbox() {
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointerleave", onPointerLeave);
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
+      canvas.removeEventListener("touchcancel", onTouchCancel);
     };
   }, []);
 
@@ -619,7 +736,8 @@ export function OrbitSandbox() {
         </svg>
       </div>
       <span ref={hintRef} className={`${styles.hint} text-xs text-secondary`}>
-        拖拽发射 · 轻点入轨 · 悬停牵引
+        <span className={styles.hintMouse}>拖拽发射 · 轻点入轨 · 悬停牵引</span>
+        <span className={styles.hintTouch}>长按拖拽发射 · 轻点入轨</span>
       </span>
     </div>
   );

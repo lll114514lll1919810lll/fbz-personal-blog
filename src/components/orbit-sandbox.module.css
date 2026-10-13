@@ -60,7 +60,9 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  touch-action: none;
+  /* 只交出垂直滚动（pan-y）：页面滑动不受阻；
+     触摸长按进入瞄准态后，由 JS 在非被动 touchmove 里逐事件抢回滚动 */
+  touch-action: pan-y;
   cursor: crosshair;
 }
 
@@ -117,6 +119,21 @@
 /* 发射过一次（或静态模式）后由 JS 标记收起 */
 .hint[data-done="1"] {
   opacity: 0;
+}
+
+/* 触摸端与鼠标端显示不同的操作提示 */
+.hintTouch {
+  display: none;
+}
+
+@media (hover: none) {
+  .hintMouse {
+    display: none;
+  }
+
+  .hintTouch {
+    display: inline;
+  }
 }
 
 @keyframes core-pulse {
