@@ -140,7 +140,7 @@ if ($r.Content.Trim().Length -le 2) { "节点不存在" } else { "节点存在" 
 
 提示词只要一句：`Remove the background, and output a PNG image`。896×1152 输入，47 秒输出同尺寸 RGBA。alpha 通道统计里 48.1% 是半透明像素——软边缘羽化，所以叠到深蓝底和白底上都无白边、无绿边污染，连花球颗粒间的细缝都正确分离了。
 
-有个发现值得单独说：去背景和图改图**共用完全相同的 Image Edit 子图**，抠图不是独立模型，而是一条编辑指令。耗时也印证了这一点（45.4s vs 47.0s）。Qwen-Image 2.1 的编辑能力是统一建模的。
+有个发现值得单独说：去背景和图改图**共用完全相同的 Image Edit 子图**，抠图就是一条编辑指令，没有单独的模型。耗时也印证了这一点（45.4s vs 47.0s）。Qwen-Image 2.1 的编辑能力是统一建模的。
 
 <figure className="post-figure">
   <img src="/images/comfyui-qwen-image-21-benchmark/05-bg-removal.jpg" alt="去背景结果对比：从左到右依次为输入原图、棋盘格表示透明的 RGBA 输出、叠加深蓝底、叠加白底，均无白边和绿边污染" width={1200} height={403} />
