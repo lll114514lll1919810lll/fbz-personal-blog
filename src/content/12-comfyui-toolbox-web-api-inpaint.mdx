@@ -4,6 +4,7 @@ export const metadata = {
   publishedAt: "2026-10-14T22:00",
   description: "把本机 ComfyUI 包装成 OpenAI Images API，工具箱从桌面搬进浏览器，并修掉一个让局部重绘几乎失效的关键缺陷：涂抹区差异 3.71 到 113.70 的完整排障过程。",
   tags: ["技术", "AI"],
+  coner: "/images/comfyui-toolbox-web-api-inpaint/cover.png",
 }
 
 [上篇](/blog/11-comfyui-qwen-image-21-benchmark)记到四类工作流全部跑通、桌面工具箱能出图为止。这篇是下篇，覆盖之后的事：把 ComfyUI 包装成任何 Agent 框架都能调的 OpenAI 兼容接口，给工具箱换上浏览器界面，顺带挖出并修掉了一个会让局部重绘几乎失效的关键缺陷。照旧，所有结论都在那台 RTX 5060 Laptop 8GB 上实测。
